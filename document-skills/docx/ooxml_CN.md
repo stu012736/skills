@@ -1,106 +1,266 @@
-# Office Open XML (OOXML) 技术参考
+# Office Open XML 技术参考
 
-本指南提供Office Open XML (OOXML) 格式的技术参考，重点关注DOCX文档的结构和操作。
+**重要：在开始之前请完整阅读本文档。** 本文档涵盖：
+- [技术指南](#技术指南) - 架构合规规则和验证要求
+- [文档内容模式](#文档内容模式) - 标题、列表、表格、格式化等的XML模式
+- [文档库（Python）](#文档库python) - 推荐使用自动基础设施设置的OOXML操作方法
+- [修订追踪（红线标记）](#修订追踪红线标记) - 实现修订追踪的XML模式
 
-## 目录
+## 技术指南
 
-1. [OOXML概述](#ooxml概述)
-2. [文档结构](#文档结构)
-3. [核心组件](#核心组件)
-4. [Python文档库](#python文档库)
-5. [修订追踪](#修订追踪)
-6. [高级操作](#高级操作)
+### 架构合规性
+- **`<w:pPr>`中的元素顺序**：`<w:pStyle>`、`<w:numPr>`、`<w:spacing>`、`<w:ind>`、`<w:jc>`
+- **空白字符**：在包含前导/尾随空格的`<w:t>`元素中添加`xml:space='preserve'`
+- **Unicode**：在ASCII内容中转义字符：`"`变为`&#8220;`
+  - **字符编码参考**：花引号`""`变为`&#8220;&#8221;`，撇号`'`变为`&#8217;`，破折号`—`变为`&#8212;`
+- **修订追踪**：在`<w:r>`元素外部使用带有`w:author="Claude"`的`<w:del>`和`<w:ins>`标签
+  - **关键**：`<w:ins>`以`</w:ins>`结束，`<w:del>`以`</w:del>`结束 - 切勿混合使用
+  - **RSID必须是8位十六进制**：使用类似`00AB1234`的值（仅包含0-9、A-F字符）
+  - **trackRevisions位置**：在settings.xml中的`<w:proofState>`之后添加`<w:trackRevisions/>`
+- **图像**：添加到`word/media/`，在`document.xml`中引用，设置尺寸以防止溢出
 
----
+## 文档内容模式
 
-## OOXML概述
-
-Office Open XML (OOXML) 是Microsoft Office文档的国际标准格式（ISO/IEC 29500）。它使用基于XML的开放格式来存储文档内容、格式和元数据。
-
-### 主要特点
-- **开放标准**：ISO/IEC 29500标准
-- **基于XML**：使用XML格式存储内容
-- **模块化结构**：文档由多个XML文件组成
-- **向后兼容**：与现有Office文档兼容
-
-### 文件格式
-- **.docx**：Word文档
-- **.xlsx**：Excel工作簿
-- **.pptx**：PowerPoint演示文稿
-
-## 文档结构
-
-### ZIP容器结构
-OOXML文档实际上是ZIP压缩文件，包含多个XML文件和资源：
-
-```
-my_document.docx
-├── [Content_Types].xml
-├── _rels/
-│   └── .rels
-├── docProps/
-│   ├── app.xml
-│   └── core.xml
-├── word/
-│   ├── document.xml
-│   ├── styles.xml
-│   ├── numbering.xml
-│   ├── fontTable.xml
-│   ├── _rels/
-│   │   └── document.xml.rels
-│   └── theme/
-│       └── theme1.xml
-└── customXml/
-    └── item1.xml
-```
-
-### 核心XML文件
-
-#### [Content_Types].xml
-定义文档中所有部分的内容类型：
+### 基本结构
 ```xml
-<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
-    <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
-    <Default Extension="xml" ContentType="application/xml"/>
-    <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
-    <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
-</Types>
+<w:p>
+  <w:r><w:t>文本内容</w:t></w:r>
+</w:p>
 ```
 
-#### word/document.xml
-文档主要内容：
+### 标题和样式
 ```xml
-<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-    <w:body>
-        <w:p>
-            <w:r>
-                <w:t>文档内容</w:t>
-            </w:r>
-        </w:p>
-    </w:body>
-</w:document>
+<w:p>
+  <w:pPr>
+    <w:pStyle w:val="Title"/>
+    <w:jc w:val="center"/>
+  </w:pPr>
+  <w:r><w:t>文档标题</w:t></w:r>
+</w:p>
+
+<w:p>
+  <w:pPr><w:pStyle w:val="Heading2"/></w:pPr>
+  <w:r><w:t>章节标题</w:t></w:r>
+</w:p>
 ```
 
-#### word/styles.xml
-文档样式定义：
+### 文本格式化
 ```xml
-<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-    <w:docDefaults>
-        <w:rPrDefault>
-            <w:rPr>
-                <w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/>
-                <w:sz w:val="24"/>
-            </w:rPr>
-        </w:rPrDefault>
-    </w:docDefaults>
-    <w:style w:type="paragraph" w:styleId="Normal">
-        <w:name w:val="Normal"/>
-        <w:qFormat/>
-    </w:style>
-</w:styles>
+<!-- 粗体 -->
+<w:r><w:rPr><w:b/><w:bCs/></w:rPr><w:t>粗体</w:t></w:r>
+<!-- 斜体 -->
+<w:r><w:rPr><w:i/><w:iCs/></w:rPr><w:t>斜体</w:t></w:r>
+<!-- 下划线 -->
+<w:r><w:rPr><w:u w:val="single"/></w:rPr><w:t>下划线</w:t></w:r>
+<!-- 高亮 -->
+<w:r><w:rPr><w:highlight w:val="yellow"/></w:rPr><w:t>高亮</w:t></w:r>
+```
+
+### 列表
+```xml
+<!-- 编号列表 -->
+<w:p>
+  <w:pPr>
+    <w:pStyle w:val="ListParagraph"/>
+    <w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr>
+    <w:spacing w:before="240"/>
+  </w:pPr>
+  <w:r><w:t>第一项</w:t></w:r>
+</w:p>
+
+<!-- 从1重新开始编号列表 - 使用不同的numId -->
+<w:p>
+  <w:pPr>
+    <w:pStyle w:val="ListParagraph"/>
+    <w:numPr><w:ilvl w:val="0"/><w:numId w:val="2"/></w:numPr>
+    <w:spacing w:before="240"/>
+  </w:pPr>
+  <w:r><w:t>新列表项1</w:t></w:r>
+</w:p>
+
+<!-- 项目符号列表（第2级） -->
+<w:p>
+  <w:pPr>
+    <w:pStyle w:val="ListParagraph"/>
+    <w:numPr><w:ilvl w:val="1"/><w:numId w:val="1"/></w:numPr>
+    <w:spacing w:before="240"/>
+    <w:ind w:left="900"/>
+  </w:pPr>
+  <w:r><w:t>项目符号项</w:t></w:r>
+</w:p>
+```
+
+### 表格
+```xml
+<w:tbl>
+  <w:tblPr>
+    <w:tblStyle w:val="TableGrid"/>
+    <w:tblW w:w="0" w:type="auto"/>
+  </w:tblPr>
+  <w:tblGrid>
+    <w:gridCol w:w="4675"/><w:gridCol w:w="4675"/>
+  </w:tblGrid>
+  <w:tr>
+    <w:tc>
+      <w:tcPr><w:tcW w:w="4675" w:type="dxa"/></w:tcPr>
+      <w:p><w:r><w:t>单元格1</w:t></w:r></w:p>
+    </w:tc>
+    <w:tc>
+      <w:tcPr><w:tcW w:w="4675" w:type="dxa"/></w:tcPr>
+      <w:p><w:r><w:t>单元格2</w:t></w:r></w:p>
+    </w:tc>
+  </w:tr>
+</w:tbl>
+```
+
+### 布局
+```xml
+<!-- 新章节前的分页符（常见模式） -->
+<w:p>
+  <w:r>
+    <w:br w:type="page"/>
+  </w:r>
+</w:p>
+<w:p>
+  <w:pPr>
+    <w:pStyle w:val="Heading1"/>
+  </w:pPr>
+  <w:r>
+    <w:t>新章节标题</w:t>
+  </w:r>
+</w:p>
+
+<!-- 居中对齐段落 -->
+<w:p>
+  <w:pPr>
+    <w:spacing w:before="240" w:after="0"/>
+    <w:jc w:val="center"/>
+  </w:pPr>
+  <w:r><w:t>居中对齐文本</w:t></w:r>
+</w:p>
+
+<!-- 字体更改 - 段落级别（应用于所有运行） -->
+<w:p>
+  <w:pPr>
+    <w:rPr><w:rFonts w:ascii="Courier New" w:hAnsi="Courier New"/></w:rPr>
+  </w:pPr>
+  <w:r><w:t>等宽文本</w:t></w:r>
+</w:p>
+
+<!-- 字体更改 - 运行级别（特定于此文本） -->
+<w:p>
+  <w:r>
+    <w:rPr><w:rFonts w:ascii="Courier New" w:hAnsi="Courier New"/></w:rPr>
+    <w:t>此文本为Courier New字体</w:t>
+  </w:r>
+  <w:r><w:t> 此文本使用默认字体</w:t></w:r>
+</w:p>
+```
+
+## 文件更新
+
+添加内容时，更新这些文件：
+
+**`word/_rels/document.xml.rels`:**
+```xml
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering" Target="numbering.xml"/>
+<Relationship Id="rId5" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/image1.png"/>
+```
+
+**`[Content_Types].xml`:**
+```xml
+<Default Extension="png" ContentType="image/png"/>
+<Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/>
+```
+
+### 图像
+**关键**：计算尺寸以防止页面溢出并保持宽高比。
+
+```xml
+<!-- 最小必需结构 -->
+<w:p>
+  <w:r>
+    <w:drawing>
+      <wp:inline>
+        <wp:extent cx="2743200" cy="1828800"/>
+        <wp:docPr id="1" name="图片1"/>
+        <a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+          <a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">
+            <pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">
+              <pic:nvPicPr>
+                <pic:cNvPr id="0" name="image1.png"/>
+                <pic:cNvPicPr/>
+              </pic:nvPicPr>
+              <pic:blipFill>
+                <a:blip r:embed="rId5"/>
+                <!-- 添加拉伸填充以保持宽高比 -->
+                <a:stretch>
+                  <a:fillRect/>
+                </a:stretch>
+              </pic:blipFill>
+              <pic:spPr>
+                <a:xfrm>
+                  <a:ext cx="2743200" cy="1828800"/>
+                </a:xfrm>
+                <a:prstGeom prst="rect"/>
+              </pic:spPr>
+            </pic:pic>
+          </a:graphicData>
+        </a:graphic>
+      </wp:inline>
+    </w:drawing>
+  </w:r>
+</w:p>
+```
+
+### 链接（超链接）
+
+**重要**：所有超链接（包括内部和外部）都需要在styles.xml中定义超链接样式。没有此样式，链接将看起来像常规文本而不是蓝色下划线的可点击链接。
+
+**外部链接：**
+```xml
+<!-- 在document.xml中 -->
+<w:hyperlink r:id="rId5">
+  <w:r>
+    <w:rPr><w:rStyle w:val="Hyperlink"/></w:rPr>
+    <w:t>链接文本</w:t>
+  </w:r>
+</w:hyperlink>
+
+<!-- 在word/_rels/document.xml.rels中 -->
+<Relationship Id="rId5" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" 
+              Target="https://www.example.com/" TargetMode="External"/>
+```
+
+**内部链接：**
+
+```xml
+<!-- 链接到书签 -->
+<w:hyperlink w:anchor="myBookmark">
+  <w:r>
+    <w:rPr><w:rStyle w:val="Hyperlink"/></w:rPr>
+    <w:t>链接文本</w:t>
+  </w:r>
+</w:hyperlink>
+
+<!-- 书签目标 -->
+<w:bookmarkStart w:id="0" w:name="myBookmark"/>
+<w:r><w:t>目标内容</w:t></w:r>
+<w:bookmarkEnd w:id="0"/>
+```
+
+**超链接样式（必需在styles.xml中）：**
+```xml
+<w:style w:type="character" w:styleId="Hyperlink">
+  <w:name w:val="Hyperlink"/>
+  <w:basedOn w:val="DefaultParagraphFont"/>
+  <w:uiPriority w:val="99"/>
+  <w:unhideWhenUsed/>
+  <w:rPr>
+    <w:color w:val="467886" w:themeColor="hyperlink"/>
+    <w:u w:val="single"/>
+  </w:rPr>
+</w:style>
 ```
 
 ## 核心组件
@@ -155,54 +315,292 @@ my_document.docx
 </w:tbl>
 ```
 
-## Python文档库
+## 文档库（Python）
 
-### python-docx库
-```python
-from docx import Document
-from docx.shared import Inches
+使用`scripts/document.py`中的Document类处理所有修订追踪和注释。它会自动处理基础设施设置（people.xml、RSIDs、settings.xml、注释文件、关系、内容类型）。仅在库不支持的复杂场景中使用直接XML操作。
 
-# 创建新文档
-doc = Document()
+**处理Unicode和实体：**
+- **搜索**：实体表示法和Unicode字符都有效 - `contains="&#8220;Company"`和`contains="\u201cCompany"`找到相同的文本
+- **替换**：使用实体（`&#8220;`）或Unicode（`\u201c`） - 两者都有效，将根据文件的编码进行适当转换（ascii → 实体，utf-8 → Unicode）
 
-# 添加标题
-doc.add_heading('文档标题', 0)
+### 初始化
 
-# 添加段落
-p = doc.add_paragraph('这是一个段落。')
-
-# 添加格式化文本
-p.add_run('粗体文本').bold = True
-p.add_run('和').bold = False
-p.add_run('斜体文本').italic = True
-
-# 添加表格
-table = doc.add_table(rows=3, cols=3)
-for i in range(3):
-    for j in range(3):
-        table.cell(i, j).text = f'单元格 {i+1},{j+1}'
-
-# 保存文档
-doc.save('example.docx')
+**查找docx技能根目录**（包含`scripts/`和`ooxml/`的目录）：
+```bash
+# 搜索document.py以定位技能根目录
+# 注意：/mnt/skills在此处用作示例；检查您的上下文以获取实际位置
+find /mnt/skills -name "document.py" -path "*/docx/scripts/*" 2>/dev/null | head -1
+# 示例输出：/mnt/skills/docx/scripts/document.py
+# 技能根目录是：/mnt/skills/docx
 ```
 
-### 读取现有文档
-```python
-from docx import Document
-
-# 打开现有文档
-doc = Document('existing.docx')
-
-# 读取所有段落
-for paragraph in doc.paragraphs:
-    print(paragraph.text)
-
-# 读取所有表格
-for table in doc.tables:
-    for row in table.rows:
-        for cell in row.cells:
-            print(cell.text)
+**使用PYTHONPATH设置为docx技能根目录运行脚本：**
+```bash
+PYTHONPATH=/mnt/skills/docx python your_script.py
 ```
+
+**在脚本中**，从技能根目录导入：
+```python
+from scripts.document import Document, DocxXMLEditor
+
+# 基本初始化（自动创建临时副本并设置基础设施）
+doc = Document('unpacked')
+
+# 自定义作者和缩写
+doc = Document('unpacked', author="张三", initials="ZS")
+
+# 启用修订追踪模式
+doc = Document('unpacked', track_revisions=True)
+
+# 指定自定义RSID（如果未提供则自动生成）
+doc = Document('unpacked', rsid="07DC5ECB")
+```
+
+### 创建修订追踪
+
+**关键**：仅标记实际更改的文本。将所有未更改的文本保留在`<w:del>`/`<w:ins>`标签外部。标记未更改的文本会使编辑不专业且更难审查。
+
+**属性处理**：Document类自动将属性（w:id、w:date、w:rsidR、w:rsidDel、w16du:dateUtc、xml:space）注入新元素。当保留原始文档中的未更改文本时，复制原始的`<w:r>`元素及其现有属性以维护文档完整性。
+
+**方法选择指南**：
+- **将您自己的更改添加到常规文本**：使用带有`<w:del>`/`<w:ins>`标签的`replace_node()`，或使用`suggest_deletion()`删除整个`<w:r>`或`<w:p>`元素
+- **部分修改其他作者的修订追踪**：使用`replace_node()`将您的更改嵌套在他们的`<w:ins>`/`<w:del>`内部
+- **完全拒绝其他作者的插入**：在`<w:ins>`元素上使用`revert_insertion()`（不是`suggest_deletion()`）
+- **完全拒绝其他作者的删除**：在`<w:del>`元素上使用`revert_deletion()`以使用修订追踪恢复已删除的内容
+
+```python
+# 最小编辑 - 更改一个词："报告是月度的" → "报告是季度的"
+# 原始：<w:r w:rsidR="00AB12CD"><w:rPr><w:rFonts w:ascii="Calibri"/></w:rPr><w:t>报告是月度的</w:t></w:r>
+node = doc["word/document.xml"].get_node(tag="w:r", contains="报告是月度的")
+rpr = tags[0].toxml() if (tags := node.getElementsByTagName("w:rPr")) else ""
+replacement = f'<w:r w:rsidR="00AB12CD">{rpr}<w:t>报告是 </w:t></w:r><w:del><w:r>{rpr}<w:delText>月度的</w:delText></w:r></w:del><w:ins><w:r>{rpr}<w:t>季度的</w:t></w:r></w:ins>'
+doc["word/document.xml"].replace_node(node, replacement)
+
+# 最小编辑 - 更改数字："在30天内" → "在45天内"
+# 原始：<w:r w:rsidR="00XYZ789"><w:rPr><w:rFonts w:ascii="Calibri"/></w:rPr><w:t>在30天内</w:t></w:r>
+node = doc["word/document.xml"].get_node(tag="w:r", contains="在30天内")
+rpr = tags[0].toxml() if (tags := node.getElementsByTagName("w:rPr")) else ""
+replacement = f'<w:r w:rsidR="00XYZ789">{rpr}<w:t>在 </w:t></w:r><w:del><w:r>{rpr}<w:delText>30</w:delText></w:r></w:del><w:ins><w:r>{rpr}<w:t>45</w:t></w:r></w:ins><w:r w:rsidR="00XYZ789">{rpr}<w:t> 天内</w:t></w:r>'
+doc["word/document.xml"].replace_node(node, replacement)
+
+# 完全替换 - 即使替换所有文本也保留格式
+node = doc["word/document.xml"].get_node(tag="w:r", contains="苹果")
+rpr = tags[0].toxml() if (tags := node.getElementsByTagName("w:rPr")) else ""
+replacement = f'<w:del><w:r>{rpr}<w:delText>苹果</w:delText></w:r></w:del><w:ins><w:r>{rpr}<w:t>香蕉 橙子</w:t></w:r></w:ins>'
+doc["word/document.xml"].replace_node(node, replacement)
+
+# 插入新内容（不需要属性 - 自动注入）
+node = doc["word/document.xml"].get_node(tag="w:r", contains="现有文本")
+doc["word/document.xml"].insert_after(node, '<w:ins><w:r><w:t>新文本</w:t></w:r></w:ins>')
+
+# 部分删除其他作者的插入
+# 原始：<w:ins w:author="李四" w:date="..."><w:r><w:t>季度财务报告</w:t></w:r></w:ins>
+# 目标：仅删除"财务"以使其成为"季度报告"
+node = doc["word/document.xml"].get_node(tag="w:ins", attrs={"w:id": "5"})
+# 重要：保留外部<w:ins>上的w:author="李四"以维护作者身份
+replacement = '''<w:ins w:author="李四" w:date="2025-01-15T10:00:00Z">
+  <w:r><w:t>季度 </w:t></w:r>
+  <w:del><w:r><w:delText>财务 </w:delText></w:r></w:del>
+  <w:r><w:t>报告</w:t></w:r>
+</w:ins>'''
+doc["word/document.xml"].replace_node(node, replacement)
+
+# 更改其他作者插入的部分内容
+# 原始：<w:ins w:author="李四"><w:r><w:t>在沉默中，安全无恙</w:t></w:r></w:ins>
+# 目标：将"安全无恙"更改为"柔软无界"
+node = doc["word/document.xml"].get_node(tag="w:ins", attrs={"w:id": "8"})
+replacement = f'''<w:ins w:author="李四" w:date="2025-01-15T10:00:00Z">
+  <w:r><w:t>在沉默中， </w:t></w:r>
+</w:ins>
+<w:ins>
+  <w:r><w:t>柔软无界</w:t></w:r>
+</w:ins>
+<w:ins w:author="李四" w:date="2025-01-15T10:00:00Z">
+  <w:del><w:r><w:delText>安全无恙</w:delText></w:r></w:del>
+</w:ins>'''
+doc["word/document.xml"].replace_node(node, replacement)
+
+# 删除整个运行（仅在删除所有内容时使用；部分删除使用replace_node）
+node = doc["word/document.xml"].get_node(tag="w:r", contains="要删除的文本")
+doc["word/document.xml"].suggest_deletion(node)
+
+# 删除整个段落（原地处理，处理常规和编号列表段落）
+para = doc["word/document.xml"].get_node(tag="w:p", contains="要删除的段落")
+doc["word/document.xml"].suggest_deletion(para)
+
+# 添加新编号列表项
+target_para = doc["word/document.xml"].get_node(tag="w:p", contains="现有列表项")
+pPr = tags[0].toxml() if (tags := target_para.getElementsByTagName("w:pPr")) else ""
+new_item = f'<w:p>{pPr}<w:r><w:t>新项</w:t></w:r></w:p>'
+tracked_para = DocxXMLEditor.suggest_paragraph(new_item)
+doc["word/document.xml"].insert_after(target_para, tracked_para)
+# 可选：在内容前添加间距段落以获得更好的视觉分离
+# spacing = DocxXMLEditor.suggest_paragraph('<w:p><w:pPr><w:pStyle w:val="ListParagraph"/></w:pPr></w:p>')
+# doc["word/document.xml"].insert_after(target_para, spacing + tracked_para)
+```
+
+### 添加注释
+
+```python
+# 添加跨越两个现有修订追踪的注释
+# 注意：w:id是自动生成的。仅在通过XML检查知道w:id时按w:id搜索
+start_node = doc["word/document.xml"].get_node(tag="w:del", attrs={"w:id": "1"})
+end_node = doc["word/document.xml"].get_node(tag="w:ins", attrs={"w:id": "2"})
+doc.add_comment(start=start_node, end=end_node, text="对此更改的解释")
+
+# 在段落上添加注释
+para = doc["word/document.xml"].get_node(tag="w:p", contains="段落文本")
+doc.add_comment(start=para, end=para, text="对此段落的注释")
+
+# 在新创建的修订追踪上添加注释
+# 首先创建修订追踪
+node = doc["word/document.xml"].get_node(tag="w:r", contains="旧")
+new_nodes = doc["word/document.xml"].replace_node(
+    node,
+    '<w:del><w:r><w:delText>旧</w:delText></w:r></w:del><w:ins><w:r><w:t>新</w:t></w:r></w:ins>'
+)
+# 然后在新建的元素上添加注释
+# new_nodes[0]是<w:del>，new_nodes[1]是<w:ins>
+doc.add_comment(start=new_nodes[0], end=new_nodes[1], text="根据要求将旧更改为新")
+
+# 回复现有注释
+doc.reply_to_comment(parent_comment_id=0, text="我同意此更改")
+```
+
+### 拒绝修订追踪
+
+**重要**：使用`revert_insertion()`拒绝插入，使用`revert_deletion()`使用修订追踪恢复删除。仅在常规未标记内容上使用`suggest_deletion()`。
+
+```python
+# 拒绝插入（将其包装在删除中）
+# 当其他作者插入了您想要删除的文本时使用此方法
+ins = doc["word/document.xml"].get_node(tag="w:ins", attrs={"w:id": "5"})
+nodes = doc["word/document.xml"].revert_insertion(ins)  # 返回[ins]
+
+# 拒绝删除（创建插入以恢复已删除的内容）
+# 当其他作者删除了您想要恢复的文本时使用此方法
+del_elem = doc["word/document.xml"].get_node(tag="w:del", attrs={"w:id": "3"})
+nodes = doc["word/document.xml"].revert_deletion(del_elem)  # 返回[del_elem, new_ins]
+
+# 拒绝段落中的所有插入
+para = doc["word/document.xml"].get_node(tag="w:p", contains="段落文本")
+nodes = doc["word/document.xml"].revert_insertion(para)  # 返回[para]
+
+# 拒绝段落中的所有删除
+para = doc["word/document.xml"].get_node(tag="w:p", contains="段落文本")
+nodes = doc["word/document.xml"].revert_deletion(para)  # 返回[para]
+```
+
+### 插入图像
+
+**关键**：Document类使用`doc.unpacked_path`处的临时副本。始终将图像复制到此临时目录，而不是原始解压缩文件夹。
+
+```python
+from PIL import Image
+import shutil, os
+
+# 首先初始化文档
+doc = Document('unpacked')
+
+# 复制图像并计算全宽尺寸，保持宽高比
+media_dir = os.path.join(doc.unpacked_path, 'word/media')
+os.makedirs(media_dir, exist_ok=True)
+shutil.copy('image.png', os.path.join(media_dir, 'image1.png'))
+img = Image.open(os.path.join(media_dir, 'image1.png'))
+width_emus = int(6.5 * 914400)  # 6.5"可用宽度，914400 EMUs/英寸
+height_emus = int(width_emus * img.size[1] / img.size[0])
+
+# 添加关系和内容类型
+rels_editor = doc['word/_rels/document.xml.rels']
+next_rid = rels_editor.get_next_rid()
+rels_editor.append_to(rels_editor.dom.documentElement,
+    f'<Relationship Id="{next_rid}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/image1.png"/>')
+doc['[Content_Types].xml'].append_to(doc['[Content_Types].xml'].dom.documentElement,
+    '<Default Extension="png" ContentType="image/png"/>')
+
+# 插入图像
+node = doc["word/document.xml"].get_node(tag="w:p", line_number=100)
+doc["word/document.xml"].insert_after(node, f'''<w:p>
+  <w:r>
+    <w:drawing>
+      <wp:inline distT="0" distB="0" distL="0" distR="0">
+        <wp:extent cx="{width_emus}" cy="{height_emus}"/>
+        <wp:docPr id="1" name="图片1"/>
+        <a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+          <a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">
+            <pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">
+              <pic:nvPicPr><pic:cNvPr id="1" name="image1.png"/><pic:cNvPicPr/></pic:nvPicPr>
+              <pic:blipFill><a:blip r:embed="{next_rid}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>
+              <pic:spPr><a:xfrm><a:ext cx="{width_emus}" cy="{height_emus}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr>
+            </pic:pic>
+          </a:graphicData>
+        </a:graphic>
+      </wp:inline>
+    </w:drawing>
+  </w:r>
+</w:p>''')
+```
+
+### 获取节点
+
+```python
+# 按文本内容
+node = doc["word/document.xml"].get_node(tag="w:p", contains="特定文本")
+
+# 按行范围
+para = doc["word/document.xml"].get_node(tag="w:p", line_number=range(100, 150))
+
+# 按属性
+node = doc["word/document.xml"].get_node(tag="w:del", attrs={"w:id": "1"})
+
+# 按精确行号（必须是标签打开的行号）
+para = doc["word/document.xml"].get_node(tag="w:p", line_number=42)
+
+# 组合过滤器
+node = doc["word/document.xml"].get_node(tag="w:r", line_number=range(40, 60), contains="文本")
+
+# 当文本多次出现时消除歧义 - 添加line_number范围
+node = doc["word/document.xml"].get_node(tag="w:r", contains="章节", line_number=range(2400, 2500))
+```
+
+### 保存
+
+```python
+# 使用自动验证保存（复制回原始目录）
+doc.save()  # 默认验证，如果验证失败则引发错误
+
+# 保存到不同位置
+doc.save('modified-unpacked')
+
+# 跳过验证（仅用于调试 - 在生产中需要此功能表明存在XML问题）
+doc.save(validate=False)
+```
+
+### 直接DOM操作
+
+对于库未涵盖的复杂场景：
+
+```python
+# 访问任何XML文件
+editor = doc["word/document.xml"]
+editor = doc["word/comments.xml"]
+
+# 直接DOM访问（defusedxml.minidom.Document）
+node = doc["word/document.xml"].get_node(tag="w:p", line_number=5)
+parent = node.parentNode
+parent.removeChild(node)
+parent.appendChild(node)  # 移动到末尾
+
+# 常规文档操作（无修订追踪）
+old_node = doc["word/document.xml"].get_node(tag="w:p", contains="原始文本")
+doc["word/document.xml"].replace_node(old_node, "<w:p><w:r><w:t>替换文本</w:t></w:r></w:p>")
+
+# 多次插入 - 使用返回值维护顺序
+node = doc["word/document.xml"].get_node(tag="w:r", line_number=100)
+nodes = doc["word/document.xml"].insert_after(node, "<w:r><w:t>A</w:t></w:r>")
+nodes = doc["word/document.xml"].insert_after(nodes[-1], "<w:r><w:t>B</w:t></w:r>")
+nodes = doc["word/document.xml"].insert_after(nodes[-1], "<w:r><w:t>C</w:t></w:r>")
+# 结果：original_node, A, B, C
 
 ### 样式操作
 ```python
@@ -234,6 +632,62 @@ doc.save('styled_document.docx')
 ```
 
 ## 修订追踪
+
+**使用上述Document类处理所有修订追踪。** 下面的模式用于构建替换XML字符串时的参考。
+
+### 验证规则
+验证器检查在还原Claude的更改后文档文本是否与原始文本匹配。这意味着：
+- **永远不要修改其他作者的`<w:ins>`或`<w:del>`标签内的文本**
+- **始终使用嵌套删除**来移除其他作者的插入
+- **每个编辑都必须使用`<w:ins>`或`<w:del>`标签进行适当追踪**
+
+### 修订追踪模式
+
+**关键规则**：
+1. 永远不要修改其他作者修订追踪内的内容。始终使用嵌套删除。
+2. **XML结构**：始终将`<w:del>`和`<w:ins>`放置在段落级别，包含完整的`<w:r>`元素。永远不要嵌套在`<w:r>`元素内部 - 这会创建无效的XML，破坏文档处理。
+
+**文本插入：**
+```xml
+<w:ins w:id="1" w:author="Claude" w:date="2025-07-30T23:05:00Z" w16du:dateUtc="2025-07-31T06:05:00Z">
+  <w:r w:rsidR="00792858">
+    <w:t>插入的文本</w:t>
+  </w:r>
+</w:ins>
+```
+
+**文本删除：**
+```xml
+<w:del w:id="2" w:author="Claude" w:date="2025-07-30T23:05:00Z" w16du:dateUtc="2025-07-31T06:05:00Z">
+  <w:r w:rsidDel="00792858">
+    <w:delText>删除的文本</w:delText>
+  </w:r>
+</w:del>
+```
+
+**删除其他作者的插入（必须使用嵌套结构）：**
+```xml
+<!-- 在原始插入内部嵌套删除 -->
+<w:ins w:author="Jane Smith" w:id="16">
+  <w:del w:author="Claude" w:id="40">
+    <w:r><w:delText>每月</w:delText></w:r>
+  </w:del>
+</w:ins>
+<w:ins w:author="Claude" w:id="41">
+  <w:r><w:t>每周</w:t></w:r>
+</w:ins>
+```
+
+**恢复其他作者的删除：**
+```xml
+<!-- 保持他们的删除不变，在其后添加新的插入 -->
+<w:del w:author="Jane Smith" w:id="50">
+  <w:r><w:delText>30天内</w:delText></w:r>
+</w:del>
+<w:ins w:author="Claude" w:id="51">
+  <w:r><w:t>30天内</w:t></w:r>
+</w:ins>
+```
 
 ### 修订标记
 ```xml

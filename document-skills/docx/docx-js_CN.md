@@ -1,848 +1,349 @@
-# 使用JavaScript/TypeScript生成DOCX文件指南
+# DOCX库教程
 
-本指南介绍如何使用docx库通过JavaScript/TypeScript创建DOCX文档。
+使用JavaScript/TypeScript生成.docx文件。
 
-## 目录
+**重要：在开始之前阅读整个文档。** 关键的格式化规则和常见陷阱贯穿全文 - 跳过部分可能导致文件损坏或渲染问题。
 
-1. [项目设置](#项目设置)
-2. [基本文档创建](#基本文档创建)
-3. [文本格式化](#文本格式化)
-4. [段落和样式](#段落和样式)
-5. [列表](#列表)
-6. [表格](#表格)
-7. [链接](#链接)
-8. [图像](#图像)
-9. [页眉和页脚](#页眉和页脚)
-10. [高级功能](#高级功能)
+## 设置
+假设docx已全局安装
+如果未安装：`npm install -g docx`
 
----
+```javascript
+const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, ImageRun, Media, 
+        Header, Footer, AlignmentType, PageOrientation, LevelFormat, ExternalHyperlink, 
+        InternalHyperlink, TableOfContents, HeadingLevel, BorderStyle, WidthType, TabStopType, 
+        TabStopPosition, UnderlineType, ShadingType, VerticalAlign, SymbolRun, PageNumber,
+        FootnoteReferenceRun, Footnote, PageBreak } = require('docx');
 
-## 项目设置
-
-### 安装依赖
-```bash
-npm install docx
+// 创建和保存
+const doc = new Document({ sections: [{ children: [/* content */] }] });
+Packer.toBuffer(doc).then(buffer => fs.writeFileSync("doc.docx", buffer)); // Node.js
+Packer.toBlob(doc).then(blob => { /* download logic */ }); // 浏览器
 ```
 
-### 基本导入
+## 文本和格式化
 ```javascript
-const { Document, Paragraph, TextRun, Packer } = require("docx");
-// 或使用ES6导入
-import { Document, Paragraph, TextRun, Packer } from "docx";
-```
+// 重要：永远不要使用 \n 进行换行 - 始终使用单独的Paragraph元素
+// ❌ 错误：new TextRun("Line 1\nLine 2")
+// ✅ 正确：new Paragraph({ children: [new TextRun("Line 1")] }), new Paragraph({ children: [new TextRun("Line 2")] })
 
-## 基本文档创建
-
-### 创建简单文档
-```javascript
-const doc = new Document({
-    sections: [{
-        properties: {},
-        children: [
-            new Paragraph({
-                children: [
-                    new TextRun("Hello World"),
-                ],
-            }),
-        ],
-    }],
-});
-
-// 保存文档
-Packer.toBuffer(doc).then((buffer) => {
-    require("fs").writeFileSync("MyDocument.docx", buffer);
-});
-```
-
-### 文档属性
-```javascript
-const doc = new Document({
-    title: "我的文档",
-    subject: "文档主题",
-    creator: "作者姓名",
-    description: "文档描述",
-    keywords: "关键词1, 关键词2",
-    // 更多属性...
-});
-```
-
-## 文本格式化
-
-### 基本文本样式
-```javascript
-new TextRun({
-    text: "格式化文本",
-    bold: true,
-    italics: true,
-    underline: {},
-    color: "FF0000", // 红色
-    size: 24, // 12pt * 2
-    font: "Arial",
-});
-```
-
-### 高级文本格式化
-```javascript
-new TextRun({
-    text: "高级格式化",
-    // 字体属性
-    bold: true,
-    italics: false,
-    underline: {
-        type: "single", // single, double, thick, dotted, dash, dotDash
-        color: "0000FF",
-    },
-    // 颜色和大小
-    color: "2E74B5",
-    size: 36, // 18pt
-    // 字体
-    font: "Calibri",
-    // 字符间距
-    characterSpacing: 20, // 1/20pt
-    // 文本效果
-    highlight: "yellow",
-    // 阴影
-    shading: {
-        fill: "D9E2F3",
-    },
-});
-```
-
-### 内联格式化
-```javascript
+// 包含所有格式化选项的基本文本
 new Paragraph({
-    children: [
-        new TextRun({
-            text: "这是",
-            size: 24,
-        }),
-        new TextRun({
-            text: "粗体",
-            bold: true,
-            size: 24,
-        }),
-        new TextRun({
-            text: "和",
-            size: 24,
-        }),
-        new TextRun({
-            text: "斜体",
-            italics: true,
-            size: 24,
-        }),
-        new TextRun({
-            text: "文本。",
-            size: 24,
-        }),
+  alignment: AlignmentType.CENTER,
+  spacing: { before: 200, after: 200 },
+  indent: { left: 720, right: 720 },
+  children: [
+    new TextRun({ text: "粗体", bold: true }),
+    new TextRun({ text: "斜体", italics: true }),
+    new TextRun({ text: "下划线", underline: { type: UnderlineType.DOUBLE, color: "FF0000" } }),
+    new TextRun({ text: "彩色", color: "FF0000", size: 28, font: "Arial" }), // Arial默认
+    new TextRun({ text: "高亮", highlight: "yellow" }),
+    new TextRun({ text: "删除线", strike: true }),
+    new TextRun({ text: "上标", superScript: true }),
+    new TextRun({ text: "下标", subScript: true }),
+    new TextRun({ text: "小型大写字母", smallCaps: true }),
+    new SymbolRun({ char: "2022", font: "Symbol" }), // 项目符号 •
+    new SymbolRun({ char: "00A9", font: "Arial" })   // 版权符号 © - 符号使用Arial字体
+  ]
+})
+```
+
+## 样式和专业格式化
+
+```javascript
+const doc = new Document({
+  styles: {
+    default: { document: { run: { font: "Arial", size: 24 } } }, // 12pt默认
+    paragraphStyles: [
+      // 文档标题样式 - 覆盖内置Title样式
+      { id: "Title", name: "Title", basedOn: "Normal",
+        run: { size: 56, bold: true, color: "000000", font: "Arial" },
+        paragraph: { spacing: { before: 240, after: 120 }, alignment: AlignmentType.CENTER } },
+      // 重要：通过使用精确的ID覆盖内置标题样式
+      { id: "Heading1", name: "Heading 1", basedOn: "Normal", next: "Normal", quickFormat: true,
+        run: { size: 32, bold: true, color: "000000", font: "Arial" }, // 16pt
+        paragraph: { spacing: { before: 240, after: 240 }, outlineLevel: 0 } }, // TOC必需
+      { id: "Heading2", name: "Heading 2", basedOn: "Normal", next: "Normal", quickFormat: true,
+        run: { size: 28, bold: true, color: "000000", font: "Arial" }, // 14pt
+        paragraph: { spacing: { before: 180, after: 180 }, outlineLevel: 1 } },
+      // 自定义样式使用您自己的ID
+      { id: "myStyle", name: "My Style", basedOn: "Normal",
+        run: { size: 28, bold: true, color: "000000" },
+        paragraph: { spacing: { after: 120 }, alignment: AlignmentType.CENTER } }
     ],
-});
-```
-
-## 段落和样式
-
-### 基本段落
-```javascript
-new Paragraph({
-    children: [new TextRun("段落内容")],
-    alignment: "center", // left, center, right, both, distribute
-    spacing: {
-        before: 200, // 1/20pt
-        after: 200,
-        line: 240, // 单倍行距
-    },
-    indent: {
-        firstLine: 400, // 首行缩进
-    },
-});
-```
-
-### 标题样式
-```javascript
-// 标题1
-new Paragraph({
+    characterStyles: [{ id: "myCharStyle", name: "My Char Style",
+      run: { color: "FF0000", bold: true, underline: { type: UnderlineType.SINGLE } } }]
+  },
+  sections: [{
+    properties: { page: { margin: { top: 1440, right: 1440, bottom: 1440, left: 1440 } } },
     children: [
-        new TextRun({
-            text: "标题1",
-            bold: true,
-            size: 32,
-        }),
-    ],
-    heading: "Heading1",
-    spacing: {
-        before: 240,
-        after: 120,
-    },
+      new Paragraph({ heading: HeadingLevel.TITLE, children: [new TextRun("文档标题")] }), // 使用覆盖的Title样式
+      new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun("标题1")] }), // 使用覆盖的Heading1样式
+      new Paragraph({ style: "myStyle", children: [new TextRun("自定义段落样式")] }),
+      new Paragraph({ children: [
+        new TextRun("普通文本 "),
+        new TextRun({ text: "自定义字符样式", style: "myCharStyle" })
+      ]})
+    ]
+  }]
 });
+```
 
-// 标题2
-new Paragraph({
+**专业字体组合：**
+- **Arial（标题）+ Arial（正文）** - 最通用支持，干净专业
+- **Times New Roman（标题）+ Arial（正文）** - 经典衬线标题与现代无衬线正文
+- **Georgia（标题）+ Verdana（正文）** - 针对屏幕阅读优化，优雅对比
+
+**关键样式原则：**
+- **覆盖内置样式**：使用精确的ID如"Heading1"、"Heading2"、"Heading3"来覆盖Word的内置标题样式
+- **HeadingLevel常量**：`HeadingLevel.HEADING_1`使用"Heading1"样式，`HeadingLevel.HEADING_2`使用"Heading2"样式等
+- **包含outlineLevel**：为H1设置`outlineLevel: 0`，为H2设置`outlineLevel: 1`等，以确保TOC正常工作
+- **使用自定义样式**而不是内联格式化以保持一致性
+- **设置默认字体**使用`styles.default.document.run.font` - Arial是通用支持的
+- **建立视觉层次**使用不同的字体大小（标题 > 标题 > 正文）
+- **添加适当的间距**使用`before`和`after`段落间距
+- **谨慎使用颜色**：默认为黑色（000000）和灰色阴影用于标题和标题（标题1，标题2等）
+- **设置一致的边距**（1440 = 1英寸是标准）
+
+## 列表（始终使用适当的列表 - 永远不要使用Unicode项目符号）
+```javascript
+// 项目符号 - 始终使用编号配置，而不是Unicode符号
+// 关键：使用LevelFormat.BULLET常量，而不是字符串"bullet"
+const doc = new Document({
+  numbering: {
+    config: [
+      { reference: "bullet-list",
+        levels: [{ level: 0, format: LevelFormat.BULLET, text: "•", alignment: AlignmentType.LEFT,
+          style: { paragraph: { indent: { left: 720, hanging: 360 } } } }] },
+      { reference: "first-numbered-list",
+        levels: [{ level: 0, format: LevelFormat.DECIMAL, text: "%1.", alignment: AlignmentType.LEFT,
+          style: { paragraph: { indent: { left: 720, hanging: 360 } } } }] },
+      { reference: "second-numbered-list", // 不同的引用 = 从1重新开始
+        levels: [{ level: 0, format: LevelFormat.DECIMAL, text: "%1.", alignment: AlignmentType.LEFT,
+          style: { paragraph: { indent: { left: 720, hanging: 360 } } } }] }
+    ]
+  },
+  sections: [{
     children: [
-        new TextRun({
-            text: "标题2",
-            bold: true,
-            size: 28,
-        }),
-    ],
-    heading: "Heading2",
-    spacing: {
-        before: 200,
-        after: 100,
-    },
+      // 项目符号列表项
+      new Paragraph({ numbering: { reference: "bullet-list", level: 0 },
+        children: [new TextRun("第一个项目符号点")] }),
+      new Paragraph({ numbering: { reference: "bullet-list", level: 0 },
+        children: [new TextRun("第二个项目符号点")] }),
+      // 编号列表项
+      new Paragraph({ numbering: { reference: "first-numbered-list", level: 0 },
+        children: [new TextRun("第一个编号项")] }),
+      new Paragraph({ numbering: { reference: "first-numbered-list", level: 0 },
+        children: [new TextRun("第二个编号项")] }),
+      // ⚠️ 关键：不同的引用 = 从1重新开始的独立列表
+      // 相同的引用 = 继续先前的编号
+      new Paragraph({ numbering: { reference: "second-numbered-list", level: 0 },
+        children: [new TextRun("再次从1开始（因为不同的引用）")] })
+    ]
+  }]
 });
-```
 
-### 段落边框和背景
-```javascript
-new Paragraph({
-    children: [new TextRun("带边框的段落")],
-    border: {
-        top: {
-            color: "auto",
-            space: 1,
-            style: "single",
-            size: 6,
-        },
-        bottom: {
-            color: "auto",
-            space: 1,
-            style: "single",
-            size: 6,
-        },
-        left: {
-            color: "auto",
-            space: 1,
-            style: "single",
-            size: 6,
-        },
-        right: {
-            color: "auto",
-            space: 1,
-            style: "single",
-            size: 6,
-        },
-    },
-    shading: {
-        fill: "F2F2F2",
-    },
-});
-```
+// ⚠️ 关键编号规则：每个引用创建一个独立的编号列表
+// - 相同的引用 = 继续编号（1, 2, 3... 然后 4, 5, 6...）
+// - 不同的引用 = 从1重新开始（1, 2, 3... 然后 1, 2, 3...）
+// 为每个单独的编号部分使用唯一的引用名称！
 
-## 列表
-
-### 项目符号列表
-```javascript
-const bulletPoints = [
-    "第一项",
-    "第二项",
-    "第三项",
-].map(
-    (text) =>
-        new Paragraph({
-            children: [new TextRun(text)],
-            numbering: {
-                reference: "my-bullet-numbering",
-                level: 0,
-            },
-        }),
-);
-
-const doc = new Document({
-    numbering: {
-        config: [
-            {
-                reference: "my-bullet-numbering",
-                levels: [
-                    {
-                        level: 0,
-                        format: "bullet",
-                        text: "•",
-                        alignment: "left",
-                        style: {
-                            paragraph: {
-                                indent: { left: 720, hanging: 360 },
-                            },
-                        },
-                    },
-                ],
-            },
-        ],
-    },
-    sections: [{
-        children: bulletPoints,
-    }],
-});
-```
-
-### 编号列表
-```javascript
-const numberedPoints = [
-    "第一步",
-    "第二步",
-    "第三步",
-].map(
-    (text, index) =>
-        new Paragraph({
-            children: [new TextRun(text)],
-            numbering: {
-                reference: "my-numbering",
-                level: 0,
-            },
-        }),
-);
-
-const doc = new Document({
-    numbering: {
-        config: [
-            {
-                reference: "my-numbering",
-                levels: [
-                    {
-                        level: 0,
-                        format: "decimal",
-                        text: "%1.",
-                        alignment: "left",
-                        style: {
-                            paragraph: {
-                                indent: { left: 720, hanging: 360 },
-                            },
-                        },
-                    },
-                ],
-            },
-        ],
-    },
-    sections: [{
-        children: numberedPoints,
-    }],
-});
-```
-
-### 多级列表
-```javascript
-const multiLevelPoints = [
-    { text: "主要项目1", level: 0 },
-    { text: "子项目1.1", level: 1 },
-    { text: "子项目1.2", level: 1 },
-    { text: "主要项目2", level: 0 },
-    { text: "子项目2.1", level: 1 },
-];
-
-const listItems = multiLevelPoints.map(
-    (item) =>
-        new Paragraph({
-            children: [new TextRun(item.text)],
-            numbering: {
-                reference: "multi-level-numbering",
-                level: item.level,
-            },
-        }),
-);
-
-const doc = new Document({
-    numbering: {
-        config: [
-            {
-                reference: "multi-level-numbering",
-                levels: [
-                    {
-                        level: 0,
-                        format: "decimal",
-                        text: "%1.",
-                        alignment: "left",
-                        style: {
-                            paragraph: {
-                                indent: { left: 720, hanging: 360 },
-                            },
-                        },
-                    },
-                    {
-                        level: 1,
-                        format: "decimal",
-                        text: "%1.%2.",
-                        alignment: "left",
-                        style: {
-                            paragraph: {
-                                indent: { left: 1440, hanging: 360 },
-                            },
-                        },
-                    },
-                ],
-            },
-        ],
-    },
-    sections: [{
-        children: listItems,
-    }],
-});
+// ⚠️ 关键：永远不要使用Unicode项目符号 - 它们创建无法正常工作的假列表
+// new TextRun("• 项目")           // 错误
+// new SymbolRun({ char: "2022" }) // 错误
+// ✅ 始终使用带有LevelFormat.BULLET常量的编号配置来创建真正的Word列表
 ```
 
 ## 表格
-
-### 基本表格
 ```javascript
-const { Table, TableRow, TableCell } = require("docx");
+// 包含边距、边框、标题和项目符号点的完整表格
+const tableBorder = { style: BorderStyle.SINGLE, size: 1, color: "CCCCCC" };
+const cellBorders = { top: tableBorder, bottom: tableBorder, left: tableBorder, right: tableBorder };
 
-const table = new Table({
-    width: {
-        size: 100,
-        type: "pct",
-    },
-    rows: [
-        new TableRow({
-            children: [
-                new TableCell({
-                    children: [new Paragraph("标题1")],
-                }),
-                new TableCell({
-                    children: [new Paragraph("标题2")],
-                }),
-                new TableCell({
-                    children: [new Paragraph("标题3")],
-                }),
-            ],
+new Table({
+  columnWidths: [4680, 4680], // ⚠️ 关键：在表格级别设置列宽 - 值以DXA为单位（二十分之一磅）
+  margins: { top: 100, bottom: 100, left: 180, right: 180 }, // 为所有单元格设置一次
+  rows: [
+    new TableRow({
+      tableHeader: true,
+      children: [
+        new TableCell({
+          borders: cellBorders,
+          width: { size: 4680, type: WidthType.DXA }, // 也在每个单元格上设置宽度
+          // ⚠️ 关键：始终使用ShadingType.CLEAR以防止Word中出现黑色背景。
+          shading: { fill: "D5E8F0", type: ShadingType.CLEAR }, 
+          verticalAlign: VerticalAlign.CENTER,
+          children: [new Paragraph({ 
+            alignment: AlignmentType.CENTER,
+            children: [new TextRun({ text: "标题", bold: true, size: 22 })]
+          })]
         }),
-        new TableRow({
-            children: [
-                new TableCell({
-                    children: [new Paragraph("数据1")],
-                }),
-                new TableCell({
-                    children: [new Paragraph("数据2")],
-                }),
-                new TableCell({
-                    children: [new Paragraph("数据3")],
-                }),
-            ],
+        new TableCell({
+          borders: cellBorders,
+          width: { size: 4680, type: WidthType.DXA }, // 也在每个单元格上设置宽度
+          shading: { fill: "D5E8F0", type: ShadingType.CLEAR },
+          children: [new Paragraph({ 
+            alignment: AlignmentType.CENTER,
+            children: [new TextRun({ text: "项目符号点", bold: true, size: 22 })]
+          })]
+        })
+      ]
+    }),
+    new TableRow({
+      children: [
+        new TableCell({
+          borders: cellBorders,
+          width: { size: 4680, type: WidthType.DXA }, // 也在每个单元格上设置宽度
+          children: [new Paragraph({ children: [new TextRun("常规数据")] })]
         }),
-    ],
-});
-```
-
-### 格式化表格
-```javascript
-const formattedTable = new Table({
-    width: {
-        size: 100,
-        type: "pct",
-    },
-    borders: {
-        top: { style: "single", size: 4, color: "000000" },
-        bottom: { style: "single", size: 4, color: "000000" },
-        left: { style: "single", size: 4, color: "000000" },
-        right: { style: "single", size: 4, color: "000000" },
-        insideHorizontal: { style: "single", size: 2, color: "666666" },
-        insideVertical: { style: "single", size: 2, color: "666666" },
-    },
-    rows: [
-        // 表头行
-        new TableRow({
-            tableHeader: true,
-            children: [
-                new TableCell({
-                    children: [new Paragraph({
-                        children: [new TextRun({
-                            text: "产品",
-                            bold: true,
-                            color: "FFFFFF",
-                        })],
-                        alignment: "center",
-                    })],
-                    shading: {
-                        fill: "2E74B5",
-                    },
-                }),
-                new TableCell({
-                    children: [new Paragraph({
-                        children: [new TextRun({
-                            text: "价格",
-                            bold: true,
-                            color: "FFFFFF",
-                        })],
-                        alignment: "center",
-                    })],
-                    shading: {
-                        fill: "2E74B5",
-                    },
-                }),
-            ],
-        }),
-        // 数据行
-        new TableRow({
-            children: [
-                new TableCell({
-                    children: [new Paragraph("产品A")],
-                }),
-                new TableCell({
-                    children: [new Paragraph("$100")],
-                    shading: {
-                        fill: "F2F2F2",
-                    },
-                }),
-            ],
-        }),
-    ],
-});
-```
-
-### 合并单元格
-```javascript
-const mergedTable = new Table({
-    rows: [
-        new TableRow({
-            children: [
-                new TableCell({
-                    children: [new Paragraph("合并单元格")],
-                    columnSpan: 2, // 跨2列
-                }),
-            ],
-        }),
-        new TableRow({
-            children: [
-                new TableCell({
-                    children: [new Paragraph("单元格1")],
-                }),
-                new TableCell({
-                    children: [new Paragraph("单元格2")],
-                }),
-            ],
-        }),
-    ],
-});
-```
-
-## 链接
-
-### 超链接
-```javascript
-const { ExternalHyperlink } = require("docx");
-
-new Paragraph({
-    children: [
-        new ExternalHyperlink({
-            children: [
-                new TextRun({
-                    text: "点击访问网站",
-                    style: "Hyperlink",
-                }),
-            ],
-            link: "https://example.com",
-        }),
-    ],
-});
-```
-
-### 内部链接（书签）
-```javascript
-const { InternalHyperlink } = require("docx");
-
-// 创建书签
-new Paragraph({
-    children: [
-        new TextRun({
-            text: "章节标题",
-            bold: true,
-        }),
-    ],
-    bookmark: {
-        id: "chapter1",
-    },
-});
-
-// 创建指向书签的链接
-new Paragraph({
-    children: [
-        new InternalHyperlink({
-            children: [
-                new TextRun({
-                    text: "跳转到章节1",
-                    style: "Hyperlink",
-                }),
-            ],
-            anchor: "chapter1",
-        }),
-    ],
-});
-```
-
-## 图像
-
-### 添加图像
-```javascript
-const { ImageRun } = require("docx");
-
-new Paragraph({
-    children: [
-        new ImageRun({
-            data: require("fs").readFileSync("./image.png"),
-            transformation: {
-                width: 200,
-                height: 200,
-            },
-        }),
-    ],
-    alignment: "center",
-});
-```
-
-### 图像格式化
-```javascript
-new Paragraph({
-    children: [
-        new ImageRun({
-            data: require("fs").readFileSync("./photo.jpg"),
-            transformation: {
-                width: 400,
-                height: 300,
-            },
-            floating: {
-                horizontalPosition: {
-                    relative: "page",
-                    offset: 1000000, // 1英寸
-                },
-                verticalPosition: {
-                    relative: "page",
-                    offset: 1000000,
-                },
-            },
-        }),
-    ],
-});
-```
-
-## 页眉和页脚
-
-### 页眉
-```javascript
-const { Header } = require("docx");
-
-const doc = new Document({
-    sections: [{
-        headers: {
-            default: new Header({
-                children: [
-                    new Paragraph({
-                        children: [
-                            new TextRun({
-                                text: "文档标题",
-                                bold: true,
-                                size: 16,
-                            }),
-                        ],
-                        alignment: "center",
-                    }),
-                ],
+        new TableCell({
+          borders: cellBorders,
+          width: { size: 4680, type: WidthType.DXA }, // 也在每个单元格上设置宽度
+          children: [
+            new Paragraph({ 
+              numbering: { reference: "bullet-list", level: 0 },
+              children: [new TextRun("第一个项目符号点")] 
             }),
-        },
-        children: [/* 文档内容 */],
-    }],
-});
+            new Paragraph({ 
+              numbering: { reference: "bullet-list", level: 0 },
+              children: [new TextRun("第二个项目符号点")] 
+            })
+          ]
+        })
+      ]
+    })
+  ]
+})
 ```
 
-### 页脚
-```javascript
-const { Footer } = require("docx");
+**重要：表格宽度和边框**
+- 使用BOTH `columnWidths: [width1, width2, ...]`数组AND `width: { size: X, type: WidthType.DXA }`在每个单元格上
+- 值以DXA为单位（二十分之一磅）：1440 = 1英寸，Letter可用宽度 = 9360 DXA（带1英寸边距）
+- 将边框应用于单个`TableCell`元素，而不是`Table`本身
 
-const doc = new Document({
-    sections: [{
-        footers: {
-            default: new Footer({
-                children: [
-                    new Paragraph({
-                        children: [
-                            new TextRun({
-                                text: "第",
-                            }),
-                            new TextRun({
-                                text: "1",
-                                bold: true,
-                            }),
-                            new TextRun({
-                                text: "页",
-                            }),
-                        ],
-                        alignment: "center",
-                    }),
-                ],
-            }),
-        },
-        children: [/* 文档内容 */],
-    }],
-});
+**预计算列宽（Letter尺寸带1英寸边距 = 9360 DXA总计）：**
+- **2列：** `columnWidths: [4680, 4680]`（等宽）
+- **3列：** `columnWidths: [3120, 3120, 3120]`（等宽）
+
+## 链接和导航
+```javascript
+// TOC（需要标题） - 关键：仅使用HeadingLevel，不使用自定义样式
+// ❌ 错误：new Paragraph({ heading: HeadingLevel.HEADING_1, style: "customHeader", children: [new TextRun("标题")] })
+// ✅ 正确：new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun("标题")] })
+new TableOfContents("目录", { hyperlink: true, headingStyleRange: "1-3" }),
+
+// 外部链接
+new Paragraph({
+  children: [new ExternalHyperlink({
+    children: [new TextRun({ text: "Google", style: "Hyperlink" })],
+    link: "https://www.google.com"
+  })]
+}),
+
+// 内部链接和书签
+new Paragraph({
+  children: [new InternalHyperlink({
+    children: [new TextRun({ text: "转到章节", style: "Hyperlink" })],
+    anchor: "section1"
+  })]
+}),
+new Paragraph({
+  children: [new TextRun("章节内容")],
+  bookmark: { id: "section1", name: "section1" }
+}),
 ```
 
-### 页码
+## 图像和媒体
 ```javascript
-const { PageNumber } = require("docx");
-
-const doc = new Document({
-    sections: [{
-        footers: {
-            default: new Footer({
-                children: [
-                    new Paragraph({
-                        children: [
-                            new TextRun("第"),
-                            new PageNumber("current"),
-                            new TextRun("页"),
-                        ],
-                        alignment: "center",
-                    }),
-                ],
-            }),
-        },
-        children: [/* 文档内容 */],
-    }],
-});
+// 包含大小和定位的基本图像
+// 关键：始终指定'type'参数 - 对于ImageRun是必需的
+new Paragraph({
+  alignment: AlignmentType.CENTER,
+  children: [new ImageRun({
+    type: "png", // 新要求：必须指定图像类型（png, jpg, jpeg, gif, bmp, svg）
+    data: fs.readFileSync("image.png"),
+    transformation: { width: 200, height: 150, rotation: 0 }, // 旋转角度
+    altText: { title: "Logo", description: "公司Logo", name: "名称" } // 重要：所有三个字段都是必需的
+  })]
+})
 ```
 
-## 高级功能
+## 分页符
+```javascript
+// 手动分页符
+new Paragraph({ children: [new PageBreak()] }),
 
-### 文档样式
+// 段落前分页符
+new Paragraph({
+  pageBreakBefore: true,
+  children: [new TextRun("这在新页面上开始")]
+})
+
+// ⚠️ 关键：永远不要单独使用PageBreak - 它会创建Word无法打开的无効XML
+// ❌ 错误：new PageBreak() 
+// ✅ 正确：new Paragraph({ children: [new PageBreak()] })
+```
+
+## 页眉/页脚和页面设置
 ```javascript
 const doc = new Document({
-    styles: {
-        paragraphStyles: [
-            {
-                id: "MyHeading1",
-                name: "我的标题1",
-                basedOn: "Heading1",
-                next: "Normal",
-                run: {
-                    size: 32,
-                    bold: true,
-                    color: "2E74B5",
-                },
-                paragraph: {
-                    spacing: { before: 240, after: 120 },
-                },
-            },
-        ],
+  sections: [{
+    properties: {
+      page: {
+        margin: { top: 1440, right: 1440, bottom: 1440, left: 1440 }, // 1440 = 1英寸
+        size: { orientation: PageOrientation.LANDSCAPE },
+        pageNumbers: { start: 1, formatType: "decimal" } // "upperRoman", "lowerRoman", "upperLetter", "lowerLetter"
+      }
     },
+    headers: {
+      default: new Header({ children: [new Paragraph({ 
+        alignment: AlignmentType.RIGHT,
+        children: [new TextRun("页眉文本")]
+      })] })
+    },
+    footers: {
+      default: new Footer({ children: [new Paragraph({ 
+        alignment: AlignmentType.CENTER,
+        children: [new TextRun("第 "), new TextRun({ children: [PageNumber.CURRENT] }), new TextRun(" 页，共 "), new TextRun({ children: [PageNumber.TOTAL_PAGES] })]
+      })] })
+    },
+    children: [/* content */]
+  }]
 });
 ```
 
-### 节分隔
+## 制表符
 ```javascript
-const doc = new Document({
-    sections: [
-        {
-            properties: {
-                page: {
-                    size: {
-                        orientation: "portrait",
-                        width: 12240, // 8.5英寸
-                        height: 15840, // 11英寸
-                    },
-                },
-            },
-            children: [/* 第一页内容 */],
-        },
-        {
-            properties: {
-                page: {
-                    size: {
-                        orientation: "landscape",
-                        width: 15840,
-                        height: 12240,
-                    },
-                },
-                type: "nextPage",
-            },
-            children: [/* 第二页内容 */],
-        },
-    ],
-});
+new Paragraph({
+  tabStops: [
+    { type: TabStopType.LEFT, position: TabStopPosition.MAX / 4 },
+    { type: TabStopType.CENTER, position: TabStopPosition.MAX / 2 },
+    { type: TabStopType.RIGHT, position: TabStopPosition.MAX * 3 / 4 }
+  ],
+  children: [new TextRun("左\t中\t右")]
+})
 ```
 
-### 完整示例
-```javascript
-const { Document, Paragraph, TextRun, Table, TableRow, TableCell, Packer } = require("docx");
+## 常量和快速参考
+- **下划线：** `SINGLE`, `DOUBLE`, `WAVY`, `DASH`
+- **边框：** `SINGLE`, `DOUBLE`, `DASHED`, `DOTTED`  
+- **编号：** `DECIMAL` (1,2,3), `UPPER_ROMAN` (I,II,III), `LOWER_LETTER` (a,b,c)
+- **制表符：** `LEFT`, `CENTER`, `RIGHT`, `DECIMAL`
+- **符号：** `"2022"` (•), `"00A9"` (©), `"00AE"` (®), `"2122"` (™), `"00B0"` (°), `"F070"` (✓), `"F0FC"` (✗)
 
-async function createDocument() {
-    const doc = new Document({
-        title: "示例文档",
-        creator: "AI助手",
-        description: "使用docx库创建的示例文档",
-        sections: [{
-            properties: {},
-            children: [
-                // 标题
-                new Paragraph({
-                    children: [
-                        new TextRun({
-                            text: "示例文档",
-                            bold: true,
-                            size: 36,
-                        }),
-                    ],
-                    alignment: "center",
-                    spacing: { before: 400, after: 200 },
-                }),
-                
-                // 正文
-                new Paragraph({
-                    children: [
-                        new TextRun("这是一个使用docx库创建的示例文档。"),
-                    ],
-                    spacing: { before: 100, after: 100 },
-                }),
-                
-                // 表格
-                new Table({
-                    width: { size: 100, type: "pct" },
-                    rows: [
-                        new TableRow({
-                            children: [
-                                new TableCell({
-                                    children: [new Paragraph("项目")],
-                                    shading: { fill: "F2F2F2" },
-                                }),
-                                new TableCell({
-                                    children: [new Paragraph("数量")],
-                                    shading: { fill: "F2F2F2" },
-                                }),
-                            ],
-                        }),
-                        new TableRow({
-                            children: [
-                                new TableCell({
-                                    children: [new Paragraph("产品A")],
-                                }),
-                                new TableCell({
-                                    children: [new Paragraph("100")],
-                                }),
-                            ],
-                        }),
-                    ],
-                }),
-            ],
-        }],
-    });
-
-    // 保存文档
-    const buffer = await Packer.toBuffer(doc);
-    require("fs").writeFileSync("示例文档.docx", buffer);
-    console.log("文档创建成功！");
-}
-
-createDocument().catch(console.error);
-```
-
-## 最佳实践
-
-### 性能优化
-- **批量操作**：尽量减少对文件系统的频繁读写
-- **内存管理**：处理大型文档时注意内存使用
-- **错误处理**：妥善处理异步操作中的错误
-
-### 代码组织
-- **模块化**：将文档创建逻辑分解为可重用的函数
-- **配置管理**：将样式和格式配置集中管理
-- **模板系统**：为常用文档类型创建模板
-
-### 兼容性考虑
-- **字体选择**：使用跨平台兼容的字体
-- **格式验证**：在不同版本的Word中测试生成的文档
-- **Unicode支持**：确保正确处理多语言文本
-
-通过本指南，您可以掌握使用JavaScript/TypeScript创建复杂DOCX文档的技能，满足各种文档生成需求。
+## 关键问题和常见错误
+- **关键：PageBreak必须始终放在Paragraph内部** - 独立的PageBreak会创建Word无法打开的无効XML
+- **始终使用ShadingType.CLEAR进行表格单元格着色** - 切勿使用ShadingType.SOLID（会导致黑色背景）。
+- 测量单位DXA（1440 = 1英寸） | 每个表格单元格需要≥1个Paragraph | TOC仅需要HeadingLevel样式
+- **始终使用自定义样式**和Arial字体以获得专业外观和适当的视觉层次
+- **始终设置默认字体**使用`styles.default.document.run.font` - 推荐Arial
+- **始终使用columnWidths数组用于表格** + 单个单元格宽度以获得兼容性
+- **永远不要使用Unicode符号作为项目符号** - 始终使用带有`LevelFormat.BULLET`常量的适当编号配置（而不是字符串"bullet"）
+- **永远不要在任何地方使用\n进行换行** - 始终为每行使用单独的Paragraph元素
+- **始终在Paragraph子元素中使用TextRun对象** - 永远不要直接在Paragraph上使用text属性
+- **图像的关键：** ImageRun需要`type`参数 - 始终指定"png"、"jpg"、"jpeg"、"gif"、"bmp"或"svg"
+- **项目符号的关键：** 必须使用`LevelFormat.BULLET`常量，而不是字符串"bullet"，并包含`text: "•"`作为项目符号字符
+- **编号的关键：** 每个编号引用创建一个独立的列表。相同的引用 = 继续编号（1,2,3然后4,5,6）。不同的引用 = 从1重新开始（1,2,3然后1,2,3）。为每个单独的编号部分使用唯一的引用名称！
+- **TOC的关键：** 使用TableOfContents时，标题必须仅使用HeadingLevel - 不要向标题段落添加自定义样式，否则TOC会中断
+- **表格：** 设置`columnWidths`数组 + 单个单元格宽度，将边框应用于单元格而不是表格
+- **在TABLE级别设置表格边距**以获得一致的单元格填充（避免每个单元格重复）

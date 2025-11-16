@@ -1,496 +1,294 @@
-# PDF操作指南
-
-本指南提供PDF文档的创建、编辑、分析和操作的全面指导。
-
-## 目录
-
-1. [概述](#概述)
-2. [Python库](#python库)
-3. [命令行工具](#命令行工具)
-4. [常见任务](#常见任务)
-5. [高级功能](#高级功能)
-6. [最佳实践](#最佳实践)
-
 ---
+name: pdf
+description: 用于提取文本和表格、创建新PDF、合并/拆分文档以及处理表单的综合PDF操作工具包。当Claude需要填写PDF表单或以编程方式大规模处理、生成或分析PDF文档时使用。
+license: 专有。LICENSE.txt包含完整条款
+---
+
+# PDF处理指南
 
 ## 概述
 
-PDF（便携式文档格式）是一种广泛使用的文档格式，具有跨平台兼容性和格式保持能力。本指南涵盖PDF文档的各种操作，包括创建、编辑、内容提取和分析。
+本指南涵盖使用Python库和命令行工具进行基本PDF处理操作。有关高级功能、JavaScript库和详细示例，请参阅reference.md。如果需要填写PDF表单，请阅读forms.md并按照其说明操作。
 
-### 主要特点
-- **格式保持**：文档格式在不同平台上保持一致
-- **安全性**：支持加密和权限控制
-- **可访问性**：支持文本提取和屏幕阅读器
-- **交互性**：支持表单、链接和多媒体
+## 快速开始
+
+```python
+from pypdf import PdfReader, PdfWriter
+
+# 读取PDF
+reader = PdfReader("document.pdf")
+print(f"Pages: {len(reader.pages)}")
+
+# 提取文本
+text = ""
+for page in reader.pages:
+    text += page.extract_text()
+```
 
 ## Python库
 
-### PyPDF2/PyPDF4
-```python
-import PyPDF2
+### pypdf - 基本操作
 
-# 读取PDF文件
-with open('document.pdf', 'rb') as file:
-    pdf_reader = PyPDF2.PdfReader(file)
-    
-    # 获取页面数量
-    num_pages = len(pdf_reader.pages)
-    print(f"文档包含 {num_pages} 页")
-    
-    # 提取文本内容
-    for page_num in range(num_pages):
-        page = pdf_reader.pages[page_num]
-        text = page.extract_text()
-        print(f"第 {page_num + 1} 页内容：")
-        print(text[:200])  # 显示前200个字符
+#### 合并PDF
+```python
+from pypdf import PdfWriter, PdfReader
+
+writer = PdfWriter()
+for pdf_file in ["doc1.pdf", "doc2.pdf", "doc3.pdf"]:
+    reader = PdfReader(pdf_file)
+    for page in reader.pages:
+        writer.add_page(page)
+
+with open("merged.pdf", "wb") as output:
+    writer.write(output)
 ```
 
-### pdfplumber
+#### 拆分PDF
+```python
+reader = PdfReader("input.pdf")
+for i, page in enumerate(reader.pages):
+    writer = PdfWriter()
+    writer.add_page(page)
+    with open(f"page_{i+1}.pdf", "wb") as output:
+        writer.write(output)
+```
+
+#### 提取元数据
+```python
+reader = PdfReader("document.pdf")
+meta = reader.metadata
+print(f"Title: {meta.title}")
+print(f"Author: {meta.author}")
+print(f"Subject: {meta.subject}")
+print(f"Creator: {meta.creator}")
+```
+
+#### 旋转页面
+```python
+reader = PdfReader("input.pdf")
+writer = PdfWriter()
+
+page = reader.pages[0]
+page.rotate(90)  # 顺时针旋转90度
+writer.add_page(page)
+
+with open("rotated.pdf", "wb") as output:
+    writer.write(output)
+```
+
+### pdfplumber - 文本和表格提取
+
+#### 提取带布局的文本
 ```python
 import pdfplumber
 
-# 高级PDF分析
-with pdfplumber.open('document.pdf') as pdf:
-    # 获取文档信息
-    print(f"页面数量：{len(pdf.pages)}")
-    
-    # 分析每一页
+with pdfplumber.open("document.pdf") as pdf:
     for page in pdf.pages:
-        # 提取文本
         text = page.extract_text()
-        print(f"页面文本：{text[:100]}...")
-        
-        # 提取表格
-        tables = page.extract_tables()
-        for table in tables:
-            print("表格数据：", table)
-        
-        # 提取图像
-        images = page.images
-        for img in images:
-            print(f"图像位置：{img['x0']}, {img['y0']}, {img['x1']}, {img['y1']}")
+        print(text)
 ```
 
-### reportlab（PDF生成）
+#### 提取表格
+```python
+with pdfplumber.open("document.pdf") as pdf:
+    for i, page in enumerate(pdf.pages):
+        tables = page.extract_tables()
+        for j, table in enumerate(tables):
+            print(f"Table {j+1} on page {i+1}:")
+            for row in table:
+                print(row)
+```
+
+#### 高级表格提取
+```python
+import pandas as pd
+
+with pdfplumber.open("document.pdf") as pdf:
+    all_tables = []
+    for page in pdf.pages:
+        tables = page.extract_tables()
+        for table in tables:
+            if table:  # 检查表格是否为空
+                df = pd.DataFrame(table[1:], columns=table[0])
+                all_tables.append(df)
+
+# 合并所有表格
+if all_tables:
+    combined_df = pd.concat(all_tables, ignore_index=True)
+    combined_df.to_excel("extracted_tables.xlsx", index=False)
+```
+
+### reportlab - 创建PDF
+
+#### 基本PDF创建
 ```python
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
+
+c = canvas.Canvas("hello.pdf", pagesize=letter)
+width, height = letter
+
+# 添加文本
+c.drawString(100, height - 100, "Hello World!")
+c.drawString(100, height - 120, "This is a PDF created with reportlab")
+
+# 添加线条
+c.line(100, height - 140, 400, height - 140)
+
+# 保存
+c.save()
+```
+
+#### 创建多页PDF
+```python
+from reportlab.lib.pagesizes import letter
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak
 from reportlab.lib.styles import getSampleStyleSheet
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 
-# 创建PDF文档
-def create_pdf(filename, content):
-    doc = SimpleDocTemplate(filename, pagesize=letter)
-    styles = getSampleStyleSheet()
-    
-    # 构建文档内容
-    story = []
-    
-    # 添加标题
-    title = Paragraph("PDF文档标题", styles['Title'])
-    story.append(title)
-    story.append(Spacer(1, 12))
-    
-    # 添加内容
-    for paragraph_text in content:
-        para = Paragraph(paragraph_text, styles['Normal'])
-        story.append(para)
-        story.append(Spacer(1, 6))
-    
-    # 生成PDF
-    doc.build(story)
-    print(f"PDF文件已创建：{filename}")
+doc = SimpleDocTemplate("report.pdf", pagesize=letter)
+styles = getSampleStyleSheet()
+story = []
 
-# 使用函数
-content = [
-    "这是第一个段落。",
-    "这是第二个段落，包含一些示例文本。",
-    "第三个段落展示了PDF生成功能。"
-]
-create_pdf('generated_document.pdf', content)
+# 添加内容
+title = Paragraph("Report Title", styles['Title'])
+story.append(title)
+story.append(Spacer(1, 12))
+
+body = Paragraph("This is the body of the report. " * 20, styles['Normal'])
+story.append(body)
+story.append(PageBreak())
+
+# 第2页
+story.append(Paragraph("Page 2", styles['Heading1']))
+story.append(Paragraph("Content for page 2", styles['Normal']))
+
+# 构建PDF
+doc.build(story)
 ```
 
 ## 命令行工具
 
-### pdftotext（文本提取）
+### pdftotext (poppler-utils)
 ```bash
-# 提取PDF文本到文件
-pdftotext document.pdf output.txt
+# 提取文本
+pdftotext input.pdf output.txt
+
+# 提取文本并保留布局
+pdftotext -layout input.pdf output.txt
 
 # 提取特定页面
-pdftotext -f 1 -l 3 document.pdf pages_1-3.txt
-
-# 保留布局
-pdftotext -layout document.pdf formatted_output.txt
+pdftotext -f 1 -l 5 input.pdf output.txt  # 第1-5页
 ```
 
-### pdfinfo（文档信息）
+### qpdf
 ```bash
-# 获取PDF文档信息
-pdfinfo document.pdf
+# 合并PDF
+qpdf --empty --pages file1.pdf file2.pdf -- merged.pdf
 
-# 输出格式化的信息
-pdfinfo -meta document.pdf
+# 拆分页面
+qpdf input.pdf --pages . 1-5 -- pages1-5.pdf
+qpdf input.pdf --pages . 6-10 -- pages6-10.pdf
+
+# 旋转页面
+qpdf input.pdf output.pdf --rotate=+90:1  # 将第1页旋转90度
+
+# 移除密码
+qpdf --password=mypassword --decrypt encrypted.pdf decrypted.pdf
 ```
 
-### qpdf（PDF操作）
+### pdftk (如果可用)
 ```bash
-# 解密PDF
-qpdf --decrypt encrypted.pdf decrypted.pdf
+# 合并
+pdftk file1.pdf file2.pdf cat output merged.pdf
 
-# 合并多个PDF
-qpdf --empty --pages file1.pdf file2.pdf file3.pdf -- merged.pdf
+# 拆分
+pdftk input.pdf burst
 
-# 分割PDF
-qpdf document.pdf --pages . 1-5 -- part1.pdf
-qpdf document.pdf --pages . 6-10 -- part2.pdf
-```
-
-### Ghostscript（PDF处理）
-```bash
-# 压缩PDF
-gs -sDEVICE=pdfwrite -dCompatibilityLevel=1.4 -dPDFSETTINGS=/ebook -dNOPAUSE -dQUIET -dBATCH -sOutputFile=compressed.pdf input.pdf
-
-# 转换为图像
-gs -dNOPAUSE -sDEVICE=jpeg -r300 -sOutputFile=page-%d.jpg document.pdf
-
-# 调整页面大小
-gs -sDEVICE=pdfwrite -dDEVICEWIDTHPOINTS=612 -dDEVICEHEIGHTPOINTS=792 -dFIXEDMEDIA -dPDFFitPage -sOutputFile=resized.pdf input.pdf
+# 旋转
+pdftk input.pdf rotate 1east output rotated.pdf
 ```
 
 ## 常见任务
 
-### PDF合并
+### 从扫描PDF中提取文本
 ```python
-import PyPDF2
-
-def merge_pdfs(output_path, input_paths):
-    """合并多个PDF文件"""
-    pdf_writer = PyPDF2.PdfWriter()
-    
-    for path in input_paths:
-        pdf_reader = PyPDF2.PdfReader(path)
-        for page in pdf_reader.pages:
-            pdf_writer.add_page(page)
-    
-    with open(output_path, 'wb') as out:
-        pdf_writer.write(out)
-    
-    print(f"PDF文件已合并到：{output_path}")
-
-# 使用函数
-input_files = ['file1.pdf', 'file2.pdf', 'file3.pdf']
-merge_pdfs('merged_document.pdf', input_files)
-```
-
-### PDF分割
-```python
-import PyPDF2
-
-def split_pdf(input_path, output_dir, pages_per_file=10):
-    """分割PDF文件"""
-    pdf_reader = PyPDF2.PdfReader(input_path)
-    total_pages = len(pdf_reader.pages)
-    
-    for i in range(0, total_pages, pages_per_file):
-        pdf_writer = PyPDF2.PdfWriter()
-        start_page = i
-        end_page = min(i + pages_per_file, total_pages)
-        
-        for page_num in range(start_page, end_page):
-            pdf_writer.add_page(pdf_reader.pages[page_num])
-        
-        output_path = f"{output_dir}/part_{i//pages_per_file + 1}.pdf"
-        with open(output_path, 'wb') as out:
-            pdf_writer.write(out)
-        
-        print(f"创建分割文件：{output_path}")
-
-# 使用函数
-split_pdf('large_document.pdf', 'split_parts', pages_per_file=5)
-```
-
-### 文本提取和分析
-```python
-import pdfplumber
-import re
-
-def analyze_pdf_content(pdf_path):
-    """分析PDF内容"""
-    results = {
-        'page_count': 0,
-        'total_text_length': 0,
-        'tables_found': 0,
-        'images_found': 0,
-        'keywords': {}
-    }
-    
-    with pdfplumber.open(pdf_path) as pdf:
-        results['page_count'] = len(pdf.pages)
-        
-        for page_num, page in enumerate(pdf.pages):
-            # 提取文本
-            text = page.extract_text()
-            if text:
-                results['total_text_length'] += len(text)
-                
-                # 关键词分析
-                words = re.findall(r'\b\w{4,}\b', text.lower())
-                for word in words:
-                    results['keywords'][word] = results['keywords'].get(word, 0) + 1
-            
-            # 提取表格
-            tables = page.extract_tables()
-            results['tables_found'] += len(tables)
-            
-            # 提取图像
-            images = page.images
-            results['images_found'] += len(images)
-    
-    # 排序关键词
-    results['top_keywords'] = sorted(
-        results['keywords'].items(), 
-        key=lambda x: x[1], 
-        reverse=True
-    )[:10]
-    
-    return results
-
-# 使用函数
-analysis = analyze_pdf_content('document.pdf')
-print("PDF分析结果：")
-for key, value in analysis.items():
-    print(f"{key}: {value}")
-```
-
-### PDF加密和解密
-```python
-import PyPDF2
-
-def encrypt_pdf(input_path, output_path, password):
-    """加密PDF文件"""
-    pdf_reader = PyPDF2.PdfReader(input_path)
-    pdf_writer = PyPDF2.PdfWriter()
-    
-    # 复制所有页面
-    for page in pdf_reader.pages:
-        pdf_writer.add_page(page)
-    
-    # 设置密码
-    pdf_writer.encrypt(password)
-    
-    with open(output_path, 'wb') as out:
-        pdf_writer.write(out)
-    
-    print(f"PDF文件已加密：{output_path}")
-
-def decrypt_pdf(input_path, output_path, password):
-    """解密PDF文件"""
-    try:
-        pdf_reader = PyPDF2.PdfReader(input_path)
-        if pdf_reader.is_encrypted:
-            pdf_reader.decrypt(password)
-        
-        pdf_writer = PyPDF2.PdfWriter()
-        for page in pdf_reader.pages:
-            pdf_writer.add_page(page)
-        
-        with open(output_path, 'wb') as out:
-            pdf_writer.write(out)
-        
-        print(f"PDF文件已解密：{output_path}")
-        return True
-    except Exception as e:
-        print(f"解密失败：{str(e)}")
-        return False
-
-# 使用函数
-encrypt_pdf('document.pdf', 'encrypted.pdf', 'mypassword')
-decrypt_pdf('encrypted.pdf', 'decrypted.pdf', 'mypassword')
-```
-
-## 高级功能
-
-### OCR文本识别
-```python
+# 需要：pip install pytesseract pdf2image
 import pytesseract
 from pdf2image import convert_from_path
-import cv2
 
-def pdf_ocr(pdf_path, output_text_path):
-    """对PDF进行OCR识别"""
-    # 将PDF转换为图像
-    images = convert_from_path(pdf_path, dpi=300)
-    
-    all_text = ""
-    
-    for i, image in enumerate(images):
-        # 转换为OpenCV格式
-        open_cv_image = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
-        
-        # 预处理图像
-        gray = cv2.cvtColor(open_cv_image, cv2.COLOR_BGR2GRAY)
-        
-        # OCR识别
-        text = pytesseract.image_to_string(gray, lang='chi_sim+eng')
-        all_text += f"\n=== 第 {i+1} 页 ===\n{text}\n"
-    
-    # 保存识别结果
-    with open(output_text_path, 'w', encoding='utf-8') as f:
-        f.write(all_text)
-    
-    print(f"OCR识别完成，结果保存到：{output_text_path}")
-    return all_text
+# 将PDF转换为图像
+images = convert_from_path('scanned.pdf')
 
-# 使用函数（需要安装tesseract和pdf2image）
-# pdf_ocr('scanned_document.pdf', 'ocr_output.txt')
+# 对每页进行OCR
+text = ""
+for i, image in enumerate(images):
+    text += f"Page {i+1}:\n"
+    text += pytesseract.image_to_string(image)
+    text += "\n\n"
+
+print(text)
 ```
 
-### 表单处理
+### 添加水印
 ```python
-import pdfrw
+from pypdf import PdfReader, PdfWriter
 
-def fill_pdf_form(input_path, output_path, form_data):
-    """填充PDF表单"""
-    template_pdf = pdfrw.PdfReader(input_path)
-    
-    # 填充表单字段
-    for page in template_pdf.pages:
-        annotations = page['/Annots']
-        if annotations:
-            for annotation in annotations:
-                if annotation['/Subtype'] == '/Widget':
-                    field_name = annotation['/T']
-                    if field_name in form_data:
-                        annotation.update(
-                            pdfrw.PdfDict(V=form_data[field_name])
-                        )
-    
-    # 保存填充后的PDF
-    pdfrw.PdfWriter().write(output_path, template_pdf)
-    print(f"PDF表单已填充：{output_path}")
+# 创建水印（或加载现有水印）
+watermark = PdfReader("watermark.pdf").pages[0]
 
-# 使用函数
-form_data = {
-    'name': '张三',
-    'email': 'zhangsan@example.com',
-    'phone': '13800138000'
-}
-fill_pdf_form('form_template.pdf', 'filled_form.pdf', form_data)
+# 应用到所有页面
+reader = PdfReader("document.pdf")
+writer = PdfWriter()
+
+for page in reader.pages:
+    page.merge_page(watermark)
+    writer.add_page(page)
+
+with open("watermarked.pdf", "wb") as output:
+    writer.write(output)
 ```
 
-### 水印添加
+### 提取图像
+```bash
+# 使用pdfimages (poppler-utils)
+pdfimages -j input.pdf output_prefix
+
+# 这将提取所有图像为output_prefix-000.jpg, output_prefix-001.jpg等
+```
+
+### 密码保护
 ```python
-import PyPDF2
-from reportlab.pdfgen import canvas
-from reportlab.lib.pagesizes import letter
-from io import BytesIO
+from pypdf import PdfReader, PdfWriter
 
-def add_watermark(input_path, output_path, watermark_text):
-    """添加水印到PDF"""
-    # 创建水印PDF
-    packet = BytesIO()
-    can = canvas.Canvas(packet, pagesize=letter)
-    
-    # 设置水印文本
-    can.setFont('Helvetica', 40)
-    can.setFillColorRGB(0.5, 0.5, 0.5, alpha=0.3)  # 半透明灰色
-    
-    # 在页面中心添加水印
-    can.drawString(100, 400, watermark_text)
-    can.save()
-    
-    # 移动到开始位置
-    packet.seek(0)
-    watermark_pdf = PyPDF2.PdfReader(packet)
-    
-    # 读取原始PDF
-    pdf_reader = PyPDF2.PdfReader(input_path)
-    pdf_writer = PyPDF2.PdfWriter()
-    
-    # 合并水印和原始页面
-    for page_num in range(len(pdf_reader.pages)):
-        page = pdf_reader.pages[page_num]
-        page.merge_page(watermark_pdf.pages[0])
-        pdf_writer.add_page(page)
-    
-    # 保存结果
-    with open(output_path, 'wb') as out:
-        pdf_writer.write(out)
-    
-    print(f"水印已添加到：{output_path}")
+reader = PdfReader("input.pdf")
+writer = PdfWriter()
 
-# 使用函数
-add_watermark('document.pdf', 'watermarked.pdf', '机密文档')
+for page in reader.pages:
+    writer.add_page(page)
+
+# 添加密码
+writer.encrypt("userpassword", "ownerpassword")
+
+with open("encrypted.pdf", "wb") as output:
+    writer.write(output)
 ```
 
-## 最佳实践
+## 快速参考
 
-### 性能优化
-```python
-import time
+| 任务 | 最佳工具 | 命令/代码 |
+|------|-----------|--------------|
+| 合并PDF | pypdf | `writer.add_page(page)` |
+| 拆分PDF | pypdf | 每页一个文件 |
+| 提取文本 | pdfplumber | `page.extract_text()` |
+| 提取表格 | pdfplumber | `page.extract_tables()` |
+| 创建PDF | reportlab | Canvas或Platypus |
+| 命令行合并 | qpdf | `qpdf --empty --pages ...` |
+| OCR扫描PDF | pytesseract | 先转换为图像 |
+| 填写PDF表单 | pdf-lib或pypdf（见forms.md） | 见forms.md |
 
-def optimize_pdf_processing(pdf_path):
-    """优化PDF处理性能"""
-    start_time = time.time()
-    
-    # 使用适当的库
-    with pdfplumber.open(pdf_path) as pdf:
-        # 批量处理页面
-        pages_data = []
-        for page in pdf.pages:
-            # 只提取需要的元素
-            text = page.extract_text()
-            tables = page.extract_tables()
-            
-            pages_data.append({
-                'text': text,
-                'table_count': len(tables)
-            })
-    
-    end_time = time.time()
-    print(f"处理时间：{end_time - start_time:.2f}秒")
-    return pages_data
-```
+## 下一步
 
-### 错误处理
-```python
-import os
-
-def safe_pdf_operation(pdf_path, operation_func):
-    """安全的PDF操作"""
-    try:
-        # 检查文件存在性
-        if not os.path.exists(pdf_path):
-            raise FileNotFoundError(f"PDF文件不存在：{pdf_path}")
-        
-        # 检查文件格式
-        if not pdf_path.lower().endswith('.pdf'):
-            raise ValueError("文件不是PDF格式")
-        
-        # 执行操作
-        return operation_func(pdf_path)
-        
-    except FileNotFoundError as e:
-        print(f"文件错误：{str(e)}")
-        return None
-    except Exception as e:
-        print(f"处理错误：{str(e)}")
-        return None
-
-# 使用安全操作
-def extract_text_safe(pdf_path):
-    import PyPDF2
-    with open(pdf_path, 'rb') as file:
-        pdf_reader = PyPDF2.PdfReader(file)
-        return pdf_reader.pages[0].extract_text()
-
-result = safe_pdf_operation('document.pdf', extract_text_safe)
-```
-
-### 兼容性考虑
-- **版本兼容**：确保使用的库支持目标PDF版本
-- **编码处理**：正确处理不同语言的文本编码
-- **字体嵌入**：确保生成的PDF包含必要的字体
-
-通过本指南，您可以掌握PDF文档的各种操作技能，从基本的文本提取到高级的OCR识别和表单处理。
+- 有关高级pypdfium2用法，请参阅reference.md
+- 有关JavaScript库（pdf-lib），请参阅reference.md
+- 如果需要填写PDF表单，请按照forms.md中的说明操作
+- 有关故障排除指南，请参阅reference.md

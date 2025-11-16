@@ -1,693 +1,612 @@
-# 高级PDF处理参考指南
+# PDF 处理高级参考
 
-本指南提供高级PDF处理技术的详细参考，涵盖pypdfium2库、JavaScript库和高级命令行操作。
+本文档包含高级PDF处理功能、详细示例以及主要技能说明中未涵盖的附加库。
 
-## 目录
+## pypdfium2 库 (Apache/BSD 许可证)
 
-1. [pypdfium2库](#pypdfium2库)
-2. [JavaScript PDF库](#javascript-pdf库)
-3. [高级命令行操作](#高级命令行操作)
-4. [PDF操作最佳实践](#pdf操作最佳实践)
-5. [故障排除](#故障排除)
+### 概述
+pypdfium2 是 PDFium（Chromium 的 PDF 库）的 Python 绑定。它非常适合快速 PDF 渲染、图像生成，并可作为 PyMuPDF 的替代品。
 
----
-
-## pypdfium2库
-
-pypdfium2是Python的PDF处理库，基于Google的PDFium引擎，提供高性能的PDF渲染和操作功能。
-
-### 安装和基本使用
+### 将 PDF 渲染为图像
 ```python
 import pypdfium2 as pdfium
+from PIL import Image
 
-# 打开PDF文件
+# 加载 PDF
 pdf = pdfium.PdfDocument("document.pdf")
 
-# 获取页面数量
-page_count = len(pdf)
-print(f"文档包含 {page_count} 页")
-
-# 渲染页面为图像
+# 将页面渲染为图像
 page = pdf[0]  # 第一页
-bitmap = page.render(scale=2)  # 2倍缩放
-pil_image = bitmap.to_pil()
-pil_image.save("page_0.png")
+bitmap = page.render(
+    scale=2.0,  # 更高分辨率
+    rotation=0  # 无旋转
+)
 
-# 关闭文档
-pdf.close()
+# 转换为 PIL 图像
+img = bitmap.to_pil()
+img.save("page_1.png", "PNG")
+
+# 处理多个页面
+for i, page in enumerate(pdf):
+    bitmap = page.render(scale=1.5)
+    img = bitmap.to_pil()
+    img.save(f"page_{i+1}.jpg", "JPEG", quality=90)
 ```
 
-### 高级渲染选项
+### 使用 pypdfium2 提取文本
 ```python
 import pypdfium2 as pdfium
 
-def render_pdf_with_options(pdf_path, output_dir, options=None):
-    """使用高级选项渲染PDF"""
-    default_options = {
-        'scale': 2.0,
-        'rotation': 0,
-        'crop': None,
-        'grayscale': False,
-        'optimize_mode': pdfium.OptimizeMode.LCD_DISPLAY
-    }
-    
-    if options:
-        default_options.update(options)
-    
-    pdf = pdfium.PdfDocument(pdf_path)
-    
-    for page_num in range(len(pdf)):
-        page = pdf[page_num]
-        
-        # 应用渲染选项
-        bitmap = page.render(
-            scale=default_options['scale'],
-            rotation=default_options['rotation'],
-            crop=default_options['crop'],
-            grayscale=default_options['grayscale'],
-            optimize_mode=default_options['optimize_mode']
-        )
-        
-        # 转换为PIL图像
-        pil_image = bitmap.to_pil()
-        
-        # 保存图像
-        output_path = f"{output_dir}/page_{page_num:03d}.png"
-        pil_image.save(output_path)
-        print(f"已保存: {output_path}")
-    
-    pdf.close()
-
-# 使用函数
-render_options = {
-    'scale': 3.0,
-    'grayscale': True,
-    'rotation': 90  # 旋转90度
-}
-render_pdf_with_options("document.pdf", "rendered_pages", render_options)
+pdf = pdfium.PdfDocument("document.pdf")
+for i, page in enumerate(pdf):
+    text = page.get_text()
+    print(f"第 {i+1} 页文本长度: {len(text)} 字符")
 ```
 
-### 文本提取和分析
-```python
-import pypdfium2 as pdfium
+## JavaScript 库
 
-def extract_text_advanced(pdf_path):
-    """高级文本提取功能"""
-    pdf = pdfium.PdfDocument(pdf_path)
-    
-    text_data = []
-    
-    for page_num in range(len(pdf)):
-        page = pdf[page_num]
-        
-        # 获取文本页面
-        textpage = page.get_textpage()
-        
-        # 提取文本
-        text = textpage.get_text_bounded()
-        
-        # 获取文本边界框
-        text_objects = textpage.get_text_objects()
-        
-        page_text_data = {
-            'page_number': page_num + 1,
-            'text': text,
-            'text_objects': []
-        }
-        
-        for obj in text_objects:
-            bbox = obj.get_bbox()
-            page_text_data['text_objects'].append({
-                'text': obj.get_text(),
-                'font_size': obj.get_fontsize(),
-                'bbox': {
-                    'left': bbox.left,
-                    'top': bbox.top,
-                    'right': bbox.right,
-                    'bottom': bbox.bottom
-                }
-            })
-        
-        text_data.append(page_text_data)
-        textpage.close()
-    
-    pdf.close()
-    return text_data
+### pdf-lib (MIT 许可证)
 
-# 使用函数
-text_analysis = extract_text_advanced("document.pdf")
-for page_data in text_analysis:
-    print(f"第 {page_data['page_number']} 页:")
-    print(f"文本长度: {len(page_data['text'])} 字符")
-    print(f"文本对象数量: {len(page_data['text_objects'])}")
-```
+pdf-lib 是一个强大的 JavaScript 库，用于在任何 JavaScript 环境中创建和修改 PDF 文档。
 
-### PDF操作功能
-```python
-import pypdfium2 as pdfium
-
-def manipulate_pdf(input_path, output_path, operations):
-    """PDF文档操作"""
-    pdf = pdfium.PdfDocument(input_path)
-    
-    # 创建新的PDF文档
-    new_pdf = pdfium.PdfDocument.new()
-    
-    for operation in operations:
-        if operation['type'] == 'extract_pages':
-            # 提取特定页面
-            pages = operation['pages']
-            for page_num in pages:
-                if 0 <= page_num < len(pdf):
-                    page = pdf[page_num]
-                    new_pdf.insert_pdf(pdf, page_num, page_num + 1)
-        
-        elif operation['type'] == 'rotate_pages':
-            # 旋转页面
-            pages = operation['pages']
-            rotation = operation['rotation']
-            for page_num in pages:
-                if 0 <= page_num < len(new_pdf):
-                    page = new_pdf[page_num]
-                    page.set_rotation(rotation)
-        
-        elif operation['type'] == 'merge_pdf':
-            # 合并其他PDF
-            merge_path = operation['path']
-            merge_pdf = pdfium.PdfDocument(merge_path)
-            new_pdf.insert_pdf(merge_pdf, 0, len(merge_pdf))
-            merge_pdf.close()
-    
-    # 保存新文档
-    new_pdf.save(output_path)
-    pdf.close()
-    new_pdf.close()
-    print(f"PDF操作完成: {output_path}")
-
-# 使用函数
-operations = [
-    {'type': 'extract_pages', 'pages': [0, 2, 4]},
-    {'type': 'rotate_pages', 'pages': [0], 'rotation': 90},
-    {'type': 'merge_pdf', 'path': 'additional.pdf'}
-]
-
-manipulate_pdf("source.pdf", "modified.pdf", operations)
-```
-
-## JavaScript PDF库
-
-### PDF.js（Mozilla）
+#### 加载和操作现有 PDF
 ```javascript
-// 使用PDF.js加载和显示PDF
-const pdfjsLib = window['pdfjs-dist/build/pdf'];
+import { PDFDocument } from 'pdf-lib';
+import fs from 'fs';
 
-// 设置worker路径
-pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+async function manipulatePDF() {
+    // 加载现有 PDF
+    const existingPdfBytes = fs.readFileSync('input.pdf');
+    const pdfDoc = await PDFDocument.load(existingPdfBytes);
 
-// 加载PDF文档
-const loadingTask = pdfjsLib.getDocument('document.pdf');
-loadingTask.promise.then(function(pdf) {
-    console.log('PDF加载完成');
-    
     // 获取页面数量
-    console.log('页面数量:', pdf.numPages);
-    
-    // 渲染第一页
-    pdf.getPage(1).then(function(page) {
-        const scale = 1.5;
-        const viewport = page.getViewport({scale: scale});
-        
-        // 准备canvas用于渲染
-        const canvas = document.getElementById('pdf-canvas');
-        const context = canvas.getContext('2d');
-        canvas.height = viewport.height;
-        canvas.width = viewport.width;
-        
-        // 渲染页面
-        const renderContext = {
-            canvasContext: context,
-            viewport: viewport
-        };
-        
-        page.render(renderContext).promise.then(function() {
-            console.log('页面渲染完成');
-        });
+    const pageCount = pdfDoc.getPageCount();
+    console.log(`文档有 ${pageCount} 页`);
+
+    // 添加新页面
+    const newPage = pdfDoc.addPage([600, 400]);
+    newPage.drawText('由 pdf-lib 添加', {
+        x: 100,
+        y: 300,
+        size: 16
     });
-});
+
+    // 保存修改后的 PDF
+    const pdfBytes = await pdfDoc.save();
+    fs.writeFileSync('modified.pdf', pdfBytes);
+}
 ```
 
-### pdf-lib（Node.js/浏览器）
+#### 从头创建复杂 PDF
 ```javascript
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
+import fs from 'fs';
 
-// 创建新PDF
 async function createPDF() {
     const pdfDoc = await PDFDocument.create();
-    const page = pdfDoc.addPage([600, 400]);
-    
+
     // 添加字体
-    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-    
-    // 添加文本
-    page.drawText('Hello PDF!', {
+    const helveticaFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const helveticaBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+
+    // 添加页面
+    const page = pdfDoc.addPage([595, 842]); // A4 尺寸
+    const { width, height } = page.getSize();
+
+    // 添加带样式的文本
+    page.drawText('发票 #12345', {
         x: 50,
-        y: 350,
-        size: 30,
-        font: font,
-        color: rgb(0, 0, 0),
+        y: height - 50,
+        size: 18,
+        font: helveticaBold,
+        color: rgb(0.2, 0.2, 0.8)
     });
-    
-    // 保存PDF
+
+    // 添加矩形（标题背景）
+    page.drawRectangle({
+        x: 40,
+        y: height - 100,
+        width: width - 80,
+        height: 30,
+        color: rgb(0.9, 0.9, 0.9)
+    });
+
+    // 添加表格样式内容
+    const items = [
+        ['项目', '数量', '价格', '总计'],
+        ['小部件', '2', '$50', '$100'],
+        ['小工具', '1', '$75', '$75']
+    ];
+
+    let yPos = height - 150;
+    items.forEach(row => {
+        let xPos = 50;
+        row.forEach(cell => {
+            page.drawText(cell, {
+                x: xPos,
+                y: yPos,
+                size: 12,
+                font: helveticaFont
+            });
+            xPos += 120;
+        });
+        yPos -= 25;
+    });
+
     const pdfBytes = await pdfDoc.save();
-    return pdfBytes;
+    fs.writeFileSync('created.pdf', pdfBytes);
 }
-
-// 修改现有PDF
-async function modifyPDF(existingPdfBytes) {
-    const pdfDoc = await PDFDocument.load(existingPdfBytes);
-    const pages = pdfDoc.getPages();
-    const firstPage = pages[0];
-    
-    // 添加水印
-    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-    firstPage.drawText('CONFIDENTIAL', {
-        x: 50,
-        y: 50,
-        size: 12,
-        font: font,
-        color: rgb(0.5, 0.5, 0.5),
-        opacity: 0.5,
-    });
-    
-    return await pdfDoc.save();
-}
-
-// 使用函数
-createPDF().then(pdfBytes => {
-    // 处理生成的PDF字节
-    console.log('PDF创建完成，大小:', pdfBytes.length);
-});
 ```
 
-### jsPDF（客户端PDF生成）
+#### 高级合并和拆分操作
 ```javascript
-// 使用jsPDF生成PDF
-import jsPDF from 'jspdf';
+import { PDFDocument } from 'pdf-lib';
+import fs from 'fs';
 
-// 创建简单PDF
-function generateSimplePDF() {
-    const doc = new jsPDF();
-    
-    // 添加文本
-    doc.text('Hello world!', 10, 10);
-    doc.text('这是第二行文本', 10, 20);
-    
-    // 添加矩形
-    doc.rect(5, 5, 200, 50);
-    
-    // 保存PDF
-    doc.save('simple.pdf');
+async function mergePDFs() {
+    // 创建新文档
+    const mergedPdf = await PDFDocument.create();
+
+    // 加载源 PDF
+    const pdf1Bytes = fs.readFileSync('doc1.pdf');
+    const pdf2Bytes = fs.readFileSync('doc2.pdf');
+
+    const pdf1 = await PDFDocument.load(pdf1Bytes);
+    const pdf2 = await PDFDocument.load(pdf2Bytes);
+
+    // 从第一个 PDF 复制页面
+    const pdf1Pages = await mergedPdf.copyPages(pdf1, pdf1.getPageIndices());
+    pdf1Pages.forEach(page => mergedPdf.addPage(page));
+
+    // 从第二个 PDF 复制特定页面（第 0、2、4 页）
+    const pdf2Pages = await mergedPdf.copyPages(pdf2, [0, 2, 4]);
+    pdf2Pages.forEach(page => mergedPdf.addPage(page));
+
+    const mergedPdfBytes = await mergedPdf.save();
+    fs.writeFileSync('merged.pdf', mergedPdfBytes);
 }
+```
 
-// 生成带表格的PDF
-function generateTablePDF(data) {
-    const doc = new jsPDF();
-    
-    // 设置表格数据
-    const tableData = data.map(item => [
-        item.name,
-        item.age,
-        item.city
-    ]);
-    
-    // 添加表格
-    doc.autoTable({
-        head: [['姓名', '年龄', '城市']],
-        body: tableData,
-        startY: 20,
-        styles: {
-            fontSize: 10,
-            cellPadding: 3,
-        },
-        headStyles: {
-            fillColor: [22, 160, 133],
-            textColor: 255,
-        },
-    });
-    
-    doc.save('table.pdf');
+### pdfjs-dist (Apache 许可证)
+
+PDF.js 是 Mozilla 的 JavaScript 库，用于在浏览器中渲染 PDF。
+
+#### 基本 PDF 加载和渲染
+```javascript
+import * as pdfjsLib from 'pdfjs-dist';
+
+// 配置 worker（对性能很重要）
+pdfjsLib.GlobalWorkerOptions.workerSrc = './pdf.worker.js';
+
+async function renderPDF() {
+    // 加载 PDF
+    const loadingTask = pdfjsLib.getDocument('document.pdf');
+    const pdf = await loadingTask.promise;
+
+    console.log(`已加载 PDF，共 ${pdf.numPages} 页`);
+
+    // 获取第一页
+    const page = await pdf.getPage(1);
+    const viewport = page.getViewport({ scale: 1.5 });
+
+    // 渲染到画布
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
+    canvas.height = viewport.height;
+    canvas.width = viewport.width;
+
+    const renderContext = {
+        canvasContext: context,
+        viewport: viewport
+    };
+
+    await page.render(renderContext).promise;
+    document.body.appendChild(canvas);
 }
+```
 
-// 使用函数
-const sampleData = [
-    { name: '张三', age: 30, city: '北京' },
-    { name: '李四', age: 25, city: '上海' },
-    { name: '王五', age: 35, city: '广州' }
-];
+#### 提取带坐标的文本
+```javascript
+import * as pdfjsLib from 'pdfjs-dist';
 
-generateTablePDF(sampleData);
+async function extractText() {
+    const loadingTask = pdfjsLib.getDocument('document.pdf');
+    const pdf = await loadingTask.promise;
+
+    let fullText = '';
+
+    // 从所有页面提取文本
+    for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const textContent = await page.getTextContent();
+
+        const pageText = textContent.items
+            .map(item => item.str)
+            .join(' ');
+
+        fullText += `\n--- 第 ${i} 页 ---\n${pageText}`;
+
+        // 获取带坐标的文本用于高级处理
+        const textWithCoords = textContent.items.map(item => ({
+            text: item.str,
+            x: item.transform[4],
+            y: item.transform[5],
+            width: item.width,
+            height: item.height
+        }));
+    }
+
+    console.log(fullText);
+    return fullText;
+}
+```
+
+#### 提取注释和表单
+```javascript
+import * as pdfjsLib from 'pdfjs-dist';
+
+async function extractAnnotations() {
+    const loadingTask = pdfjsLib.getDocument('annotated.pdf');
+    const pdf = await loadingTask.promise;
+
+    for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const annotations = await page.getAnnotations();
+
+        annotations.forEach(annotation => {
+            console.log(`注释类型: ${annotation.subtype}`);
+            console.log(`内容: ${annotation.contents}`);
+            console.log(`坐标: ${JSON.stringify(annotation.rect)}`);
+        });
+    }
+}
 ```
 
 ## 高级命令行操作
 
-### Ghostscript高级用法
+### poppler-utils 高级功能
+
+#### 提取带边界框坐标的文本
 ```bash
-# 高质量PDF压缩
-gs -sDEVICE=pdfwrite -dCompatibilityLevel=1.4 \
-   -dPDFSETTINGS=/prepress -dNOPAUSE -dQUIET -dBATCH \
-   -sOutputFile=compressed.pdf input.pdf
+# 提取带边界框坐标的文本（对结构化数据至关重要）
+pdftotext -bbox-layout document.pdf output.xml
 
-# 提取特定页面范围
-gs -sDEVICE=pdfwrite -dNOPAUSE -dBATCH \
-   -dFirstPage=1 -dLastPage=5 \
-   -sOutputFile=pages_1-5.pdf input.pdf
-
-# PDF到高质量PNG转换
-gs -dNOPAUSE -sDEVICE=png16m -r300 \
-   -sOutputFile=page-%d.png input.pdf
-
-# 调整PDF尺寸
-gs -sDEVICE=pdfwrite -dDEVICEWIDTHPOINTS=612 \
-   -dDEVICEHEIGHTPOINTS=792 -dFIXEDMEDIA \
-   -dPDFFitPage -sOutputFile=resized.pdf input.pdf
+# XML 输出包含每个文本元素的精确坐标
 ```
 
-### pdftk高级功能
+#### 高级图像转换
 ```bash
-# 加密PDF
-pdftk input.pdf output encrypted.pdf user_pw mypassword
+# 转换为特定分辨率的 PNG 图像
+pdftoppm -png -r 300 document.pdf output_prefix
 
-# 解密PDF
-pdftk encrypted.pdf input_pw mypassword output decrypted.pdf
+# 转换特定页面范围的高分辨率图像
+pdftoppm -png -r 600 -f 1 -l 3 document.pdf high_res_pages
 
-# 旋转特定页面
-pdftk input.pdf cat 1E 2-5 6E output rotated.pdf
-
-# 填充PDF表单
-pdftk form.pdf fill_form data.fdf output filled.pdf
-
-# 生成PDF报告
-pdftk A=document1.pdf B=document2.pdf cat A1-5 B1-3 A6-end output combined.pdf
+# 转换为带质量设置的 JPEG
+pdftoppm -jpeg -jpegopt quality=85 -r 200 document.pdf jpeg_output
 ```
 
-### ImageMagick PDF处理
+#### 提取嵌入式图像
 ```bash
-# PDF到高质量JPEG转换
-convert -density 300 input.pdf -quality 90 output.jpg
+# 提取所有带元数据的嵌入式图像
+pdfimages -j -p document.pdf page_images
 
-# 批量处理PDF页面
-for i in {0..9}; do
-    convert -density 150 "input.pdf[$i]" "page_$i.png"
-done
+# 列出图像信息而不提取
+pdfimages -list document.pdf
 
-# 创建PDF缩略图
-convert -thumbnail x300 -background white -alpha remove input.pdf[0] thumbnail.jpg
-
-# PDF到多页TIFF
-convert -density 200 input.pdf -compress lzw output.tiff
+# 以原始格式提取图像
+pdfimages -all document.pdf images/img
 ```
 
-### OCRmyPDF（OCR处理）
+### qpdf 高级功能
+
+#### 复杂页面操作
 ```bash
-# 对扫描的PDF进行OCR
-ocrmypdf --output-type pdf --force-ocr scanned.pdf ocr_output.pdf
+# 将 PDF 拆分为页面组
+qpdf --split-pages=3 input.pdf output_group_%02d.pdf
 
-# 优化和OCR
-ocrmypdf --optimize 3 --jpeg-quality 85 --force-ocr input.pdf output.pdf
+# 提取复杂范围的特定页面
+qpdf input.pdf --pages input.pdf 1,3-5,8,10-end -- extracted.pdf
 
-# 多语言OCR
-ocrmypdf -l chi_sim+eng --force-ocr multilingual.pdf ocr_output.pdf
-
-# 批量OCR处理
-for pdf in *.pdf; do
-    ocrmypdf --force-ocr "$pdf" "ocr_$pdf"
-done
+# 从多个 PDF 合并特定页面
+qpdf --empty --pages doc1.pdf 1-3 doc2.pdf 5-7 doc3.pdf 2,4 -- combined.pdf
 ```
 
-## PDF操作最佳实践
+#### PDF 优化和修复
+```bash
+# 为 Web 优化 PDF（线性化以支持流式传输）
+qpdf --linearize input.pdf optimized.pdf
 
-### 性能优化策略
+# 删除未使用的对象并压缩
+qpdf --optimize-level=all input.pdf compressed.pdf
+
+# 尝试修复损坏的 PDF 结构
+qpdf --check input.pdf
+qpdf --fix-qdf damaged.pdf repaired.pdf
+
+# 显示详细的 PDF 结构用于调试
+qpdf --show-all-pages input.pdf > structure.txt
+```
+
+#### 高级加密
+```bash
+# 添加带特定权限的密码保护
+qpdf --encrypt user_pass owner_pass 256 --print=none --modify=none -- input.pdf encrypted.pdf
+
+# 检查加密状态
+qpdf --show-encryption encrypted.pdf
+
+# 移除密码保护（需要密码）
+qpdf --password=secret123 --decrypt encrypted.pdf decrypted.pdf
+```
+
+## 高级 Python 技术
+
+### pdfplumber 高级功能
+
+#### 提取带精确坐标的文本
 ```python
-import time
-import psutil
+import pdfplumber
+
+with pdfplumber.open("document.pdf") as pdf:
+    page = pdf.pages[0]
+    
+    # 提取所有带坐标的文本
+    chars = page.chars
+    for char in chars[:10]:  # 前 10 个字符
+        print(f"字符: '{char['text']}' 位置 x:{char['x0']:.1f} y:{char['y0']:.1f}")
+    
+    # 按边界框提取文本（左、上、右、下）
+    bbox_text = page.within_bbox((100, 100, 400, 200)).extract_text()
+```
+
+#### 带自定义设置的高级表格提取
+```python
+import pdfplumber
+import pandas as pd
+
+with pdfplumber.open("complex_table.pdf") as pdf:
+    page = pdf.pages[0]
+    
+    # 使用自定义设置提取复杂布局的表格
+    table_settings = {
+        "vertical_strategy": "lines",
+        "horizontal_strategy": "lines",
+        "snap_tolerance": 3,
+        "intersection_tolerance": 15
+    }
+    tables = page.extract_tables(table_settings)
+    
+    # 表格提取的可视化调试
+    img = page.to_image(resolution=150)
+    img.save("debug_layout.png")
+```
+
+### reportlab 高级功能
+
+#### 创建带表格的专业报告
+```python
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib import colors
+
+# 示例数据
+data = [
+    ['产品', 'Q1', 'Q2', 'Q3', 'Q4'],
+    ['小部件', '120', '135', '142', '158'],
+    ['小工具', '85', '92', '98', '105']
+]
+
+# 创建带表格的 PDF
+doc = SimpleDocTemplate("report.pdf")
+elements = []
+
+# 添加标题
+styles = getSampleStyleSheet()
+title = Paragraph("季度销售报告", styles['Title'])
+elements.append(title)
+
+# 添加带高级样式的表格
+table = Table(data)
+table.setStyle(TableStyle([
+    ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+    ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+    ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+    ('FONTSIZE', (0, 0), (-1, 0), 14),
+    ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+    ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+    ('GRID', (0, 0), (-1, -1), 1, colors.black)
+]))
+elements.append(table)
+
+doc.build(elements)
+```
+
+## 复杂工作流
+
+### 从 PDF 提取图形/图像
+
+#### 方法 1：使用 pdfimages（最快）
+```bash
+# 以原始质量提取所有图像
+pdfimages -all document.pdf images/img
+```
+
+#### 方法 2：使用 pypdfium2 + 图像处理
+```python
+import pypdfium2 as pdfium
+from PIL import Image
+import numpy as np
+
+def extract_figures(pdf_path, output_dir):
+    pdf = pdfium.PdfDocument(pdf_path)
+    
+    for page_num, page in enumerate(pdf):
+        # 渲染高分辨率页面
+        bitmap = page.render(scale=3.0)
+        img = bitmap.to_pil()
+        
+        # 转换为 numpy 进行处理
+        img_array = np.array(img)
+        
+        # 简单图形检测（非白色区域）
+        mask = np.any(img_array != [255, 255, 255], axis=2)
+        
+        # 查找轮廓并提取边界框
+        # （这是简化版 - 实际实现需要更复杂的检测）
+        
+        # 保存检测到的图形
+        # ... 实现取决于具体需求
+```
+
+### 带错误处理的批量 PDF 处理
+```python
 import os
-
-def optimize_pdf_processing(pdf_path, operations):
-    """PDF处理性能优化"""
-    start_time = time.time()
-    start_memory = psutil.Process(os.getpid()).memory_info().rss / 1024 / 1024
-    
-    # 监控资源使用
-    def monitor_resources():
-        current_memory = psutil.Process(os.getpid()).memory_info().rss / 1024 / 1024
-        elapsed_time = time.time() - start_time
-        print(f"内存使用: {current_memory:.2f} MB, 运行时间: {elapsed_time:.2f}秒")
-    
-    try:
-        # 执行PDF操作
-        for i, operation in enumerate(operations):
-            print(f"执行操作 {i+1}/{len(operations)}")
-            
-            # 执行具体操作
-            result = execute_pdf_operation(pdf_path, operation)
-            
-            # 定期监控资源
-            if i % 5 == 0:
-                monitor_resources()
-        
-        end_time = time.time()
-        end_memory = psutil.Process(os.getpid()).memory_info().rss / 1024 / 1024
-        
-        print(f"处理完成 - 总时间: {end_time - start_time:.2f}秒")
-        print(f"内存峰值: {end_memory - start_memory:.2f} MB")
-        
-        return True
-        
-    except Exception as e:
-        print(f"处理失败: {str(e)}")
-        return False
-
-def execute_pdf_operation(pdf_path, operation):
-    """执行单个PDF操作"""
-    # 实现具体的PDF操作逻辑
-    time.sleep(0.1)  # 模拟操作时间
-    return f"操作完成: {operation}"
-
-# 使用函数
-operations = [f"操作{i}" for i in range(20)]
-optimize_pdf_processing("large_document.pdf", operations)
-```
-
-### 错误处理和恢复
-```python
+import glob
+from pypdf import PdfReader, PdfWriter
 import logging
-from pathlib import Path
 
-def setup_pdf_logging():
-    """设置PDF处理日志"""
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.FileHandler('pdf_processing.log'),
-            logging.StreamHandler()
-        ]
-    )
-    return logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-logger = setup_pdf_logging()
-
-def safe_pdf_operation(operation_func, *args, **kwargs):
-    """安全的PDF操作包装器"""
-    try:
-        logger.info(f"开始PDF操作: {operation_func.__name__}")
-        
-        # 验证输入文件
-        for arg in args:
-            if isinstance(arg, str) and arg.endswith('.pdf'):
-                if not Path(arg).exists():
-                    raise FileNotFoundError(f"PDF文件不存在: {arg}")
-        
-        # 执行操作
-        result = operation_func(*args, **kwargs)
-        
-        logger.info(f"PDF操作完成: {operation_func.__name__}")
-        return result
-        
-    except Exception as e:
-        logger.error(f"PDF操作失败: {operation_func.__name__} - {str(e)}")
-        
-        # 尝试恢复或清理
-        cleanup_failed_operation()
-        
-        return None
-
-def cleanup_failed_operation():
-    """清理失败的操作"""
-    # 删除可能创建的临时文件
-    temp_files = ['temp.pdf', 'output.pdf']
-    for temp_file in temp_files:
-        if Path(temp_file).exists():
-            Path(temp_file).unlink()
-            logger.info(f"已清理临时文件: {temp_file}")
-```
-
-### 批量处理优化
-```python
-import multiprocessing
-from concurrent.futures import ThreadPoolExecutor
-
-def batch_process_pdfs(pdf_files, process_function, max_workers=None):
-    """批量处理PDF文件"""
-    if max_workers is None:
-        max_workers = min(multiprocessing.cpu_count(), 4)
+def batch_process_pdfs(input_dir, operation='merge'):
+    pdf_files = glob.glob(os.path.join(input_dir, "*.pdf"))
     
-    results = []
-    
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        # 提交所有任务
-        future_to_pdf = {
-            executor.submit(process_function, pdf_file): pdf_file 
-            for pdf_file in pdf_files
-        }
-        
-        # 收集结果
-        for future in future_to_pdf:
-            pdf_file = future_to_pdf[future]
+    if operation == 'merge':
+        writer = PdfWriter()
+        for pdf_file in pdf_files:
             try:
-                result = future.result()
-                results.append({
-                    'file': pdf_file,
-                    'result': result,
-                    'status': 'success'
-                })
-                print(f"处理完成: {pdf_file}")
+                reader = PdfReader(pdf_file)
+                for page in reader.pages:
+                    writer.add_page(page)
+                logger.info(f"已处理: {pdf_file}")
+            except Exception as e:
+                logger.error(f"处理 {pdf_file} 失败: {e}")
+                continue
+        
+        with open("batch_merged.pdf", "wb") as output:
+            writer.write(output)
+    
+    elif operation == 'extract_text':
+        for pdf_file in pdf_files:
+            try:
+                reader = PdfReader(pdf_file)
+                text = ""
+                for page in reader.pages:
+                    text += page.extract_text()
+                
+                output_file = pdf_file.replace('.pdf', '.txt')
+                with open(output_file, 'w', encoding='utf-8') as f:
+                    f.write(text)
+                logger.info(f"已从 {pdf_file} 提取文本")
                 
             except Exception as e:
-                results.append({
-                    'file': pdf_file,
-                    'error': str(e),
-                    'status': 'failed'
-                })
-                print(f"处理失败: {pdf_file} - {str(e)}")
-    
-    return results
+                logger.error(f"从 {pdf_file} 提取文本失败: {e}")
+                continue
+```
 
-# 示例处理函数
-def extract_pdf_text(pdf_path):
-    """提取PDF文本"""
-    import pypdfium2 as pdfium
+### 高级 PDF 裁剪
+```python
+from pypdf import PdfWriter, PdfReader
+
+reader = PdfReader("input.pdf")
+writer = PdfWriter()
+
+# 裁剪页面（左、下、右、上，以点为单位）
+page = reader.pages[0]
+page.mediabox.left = 50
+page.mediabox.bottom = 50
+page.mediabox.right = 550
+page.mediabox.top = 750
+
+writer.add_page(page)
+with open("cropped.pdf", "wb") as output:
+    writer.write(output)
+```
+
+## 性能优化技巧
+
+### 1. 对于大型 PDF
+- 使用流式方法而不是将整个 PDF 加载到内存中
+- 使用 `qpdf --split-pages` 拆分大文件
+- 使用 pypdfium2 单独处理页面
+
+### 2. 对于文本提取
+- `pdftotext -bbox-layout` 对于纯文本提取最快
+- 使用 pdfplumber 处理结构化数据和表格
+- 对于非常大的文档，避免使用 `pypdf.extract_text()`
+
+### 3. 对于图像提取
+- `pdfimages` 比渲染页面快得多
+- 预览使用低分辨率，最终输出使用高分辨率
+
+### 4. 对于表单填写
+- pdf-lib 比大多数替代方案更好地维护表单结构
+- 在处理前预先验证表单字段
+
+### 5. 内存管理
+```python
+# 分块处理 PDF
+def process_large_pdf(pdf_path, chunk_size=10):
+    reader = PdfReader(pdf_path)
+    total_pages = len(reader.pages)
     
-    pdf = pdfium.PdfDocument(pdf_path)
+    for start_idx in range(0, total_pages, chunk_size):
+        end_idx = min(start_idx + chunk_size, total_pages)
+        writer = PdfWriter()
+        
+        for i in range(start_idx, end_idx):
+            writer.add_page(reader.pages[i])
+        
+        # 处理块
+        with open(f"chunk_{start_idx//chunk_size}.pdf", "wb") as output:
+            writer.write(output)
+```
+
+## 常见问题故障排除
+
+### 加密的 PDF
+```python
+# 处理受密码保护的 PDF
+from pypdf import PdfReader
+
+try:
+    reader = PdfReader("encrypted.pdf")
+    if reader.is_encrypted:
+        reader.decrypt("password")
+except Exception as e:
+    print(f"解密失败: {e}")
+```
+
+### 损坏的 PDF
+```bash
+# 使用 qpdf 修复
+qpdf --check corrupted.pdf
+qpdf --replace-input corrupted.pdf
+```
+
+### 文本提取问题
+```python
+# 对于扫描的 PDF 回退到 OCR
+import pytesseract
+from pdf2image import convert_from_path
+
+def extract_text_with_ocr(pdf_path):
+    images = convert_from_path(pdf_path)
     text = ""
-    
-    for page in pdf:
-        textpage = page.get_textpage()
-        text += textpage.get_text_bounded()
-        textpage.close()
-    
-    pdf.close()
+    for i, image in enumerate(images):
+        text += pytesseract.image_to_string(image)
     return text
-
-# 使用批量处理
-pdf_files = ['doc1.pdf', 'doc2.pdf', 'doc3.pdf', 'doc4.pdf']
-results = batch_process_pdfs(pdf_files, extract_pdf_text)
-
-success_count = sum(1 for r in results if r['status'] == 'success')
-print(f"批量处理完成: {success_count}/{len(pdf_files)} 成功")
 ```
 
-## 故障排除
+## 许可证信息
 
-### 常见问题解决
-
-#### 内存不足错误
-```python
-def handle_memory_issues():
-    """处理内存相关问题"""
-    import gc
-    
-    # 强制垃圾回收
-    gc.collect()
-    
-    # 监控内存使用
-    import psutil
-    memory_info = psutil.virtual_memory()
-    
-    if memory_info.percent > 85:
-        print("警告: 内存使用率过高")
-        return False
-    
-    return True
-```
-
-#### 文件损坏处理
-```python
-def repair_corrupted_pdf(pdf_path):
-    """尝试修复损坏的PDF"""
-    try:
-        # 使用Ghostscript尝试修复
-        import subprocess
-        
-        repaired_path = pdf_path.replace('.pdf', '_repaired.pdf')
-        
-        cmd = [
-            'gs', '-o', repaired_path,
-            '-sDEVICE=pdfwrite',
-            '-dPDFSETTINGS=/prepress',
-            pdf_path
-        ]
-        
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        
-        if result.returncode == 0:
-            print("PDF修复成功")
-            return repaired_path
-        else:
-            print("PDF修复失败")
-            return None
-            
-    except Exception as e:
-        print(f"修复过程中出错: {str(e)}")
-        return None
-```
-
-#### 编码问题处理
-```python
-def handle_encoding_issues(text):
-    """处理文本编码问题"""
-    import chardet
-    
-    # 检测编码
-    encoding_info = chardet.detect(text.encode() if isinstance(text, str) else text)
-    detected_encoding = encoding_info['encoding']
-    confidence = encoding_info['confidence']
-    
-    print(f"检测到编码: {detected_encoding} (置信度: {confidence:.2f})")
-    
-    if confidence > 0.7:
-        try:
-            # 尝试使用检测到的编码
-            if isinstance(text, bytes):
-                decoded_text = text.decode(detected_encoding)
-            else:
-                decoded_text = text
-            
-            return decoded_text
-            
-        except UnicodeDecodeError:
-            # 尝试其他常见编码
-            for encoding in ['utf-8', 'gbk', 'latin-1']:
-                try:
-                    if isinstance(text, bytes):
-                        return text.decode(encoding)
-                    else:
-                        return text
-                except UnicodeDecodeError:
-                    continue
-    
-    # 如果所有编码都失败，返回原始文本
-    return text if isinstance(text, str) else text.decode('utf-8', errors='ignore')
-```
-
-通过本参考指南，您可以掌握高级PDF处理技术，包括高性能库的使用、JavaScript PDF操作、命令行工具的高级功能以及最佳实践和故障排除方法。
+- **pypdf**: BSD 许可证
+- **pdfplumber**: MIT 许可证
+- **pypdfium2**: Apache/BSD 许可证
+- **reportlab**: BSD 许可证
+- **poppler-utils**: GPL-2 许可证
+- **qpdf**: Apache 许可证
+- **pdf-lib**: MIT 许可证
+- **pdfjs-dist**: Apache 许可证

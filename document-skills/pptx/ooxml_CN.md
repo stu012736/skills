@@ -1,16 +1,16 @@
-# PowerPoint的Office Open XML技术参考
+# PowerPoint 的 Office Open XML 技术参考
 
-**重要：开始前请完整阅读本文档。** 涵盖关键的XML架构规则和格式要求。不正确的实现可能创建PowerPoint无法打开的有效PPTX文件。
+**重要：开始前请完整阅读本文档。** 整个文档涵盖了关键的 XML 模式规则和格式要求。错误的实现可能创建 PowerPoint 无法打开的有效 PPTX 文件。
 
 ## 技术指南
 
-### 架构合规性
-- **`<p:txBody>`中的元素顺序**：`<a:bodyPr>`, `<a:lstStyle>`, `<a:p>`
-- **空白字符**：在带有前导/尾随空格的`<a:t>`元素中添加`xml:space='preserve'`
-- **Unicode**：在ASCII内容中转义字符：`"`变为`&#8220;`
-- **图像**：添加到`ppt/media/`，在幻灯片XML中引用，设置尺寸以适应幻灯片边界
-- **关系**：为每个幻灯片的资源更新`ppt/slides/_rels/slideN.xml.rels`
-- **Dirty属性**：在`<a:rPr>`和`<a:endParaRPr>`元素中添加`dirty="0"`以指示干净状态
+### 模式合规性
+- **`<p:txBody>` 中的元素顺序**：`<a:bodyPr>`, `<a:lstStyle>`, `<a:p>`
+- **空白字符**：在带有前导/尾随空格的 `<a:t>` 元素中添加 `xml:space='preserve'`
+- **Unicode**：在 ASCII 内容中转义字符：`"` 变为 `&#8220;`
+- **图像**：添加到 `ppt/media/`，在幻灯片 XML 中引用，设置尺寸以适应幻灯片边界
+- **关系**：更新 `ppt/slides/_rels/slideN.xml.rels` 以包含每个幻灯片的资源
+- **脏属性**：在 `<a:rPr>` 和 `<a:endParaRPr>` 元素中添加 `dirty="0"` 以指示干净状态
 
 ## 演示文稿结构
 
@@ -28,7 +28,7 @@
 </p:sld>
 ```
 
-### 文本框/带文本的形状
+### 文本框 / 带文本的形状
 ```xml
 <p:sp>
   <p:nvSpPr>
@@ -58,7 +58,7 @@
 </p:sp>
 ```
 
-### 文本格式化
+### 文本格式
 ```xml
 <!-- 粗体 -->
 <a:r>
@@ -75,7 +75,7 @@
 <!-- 下划线 -->
 <a:r>
   <a:rPr u="sng"/>
-  <a:t>下划线文本</a:t>
+  <a:t>下划线</a:t>
 </a:r>
 
 <!-- 高亮 -->
@@ -95,12 +95,12 @@
       <a:srgbClr val="FF0000"/>
     </a:solidFill>
   </a:rPr>
-  <a:t>红色Arial 24pt</a:t>
+  <a:t>红色 Arial 24pt</a:t>
 </a:r>
 
-<!-- 完整格式化示例 -->
+<!-- 完整格式示例 -->
 <a:r>
-  <a:rPr lang="zh-CN" sz="1400" b="1" dirty="0">
+  <a:rPr lang="en-US" sz="1400" b="1" dirty="0">
     <a:solidFill>
       <a:srgbClr val="FAFAFA"/>
     </a:solidFill>
@@ -247,7 +247,7 @@
               <a:lstStyle/>
               <a:p>
                 <a:r>
-                  <a:t>单元格1</a:t>
+                  <a:t>单元格 1</a:t>
                 </a:r>
               </a:p>
             </a:txBody>
@@ -258,7 +258,7 @@
               <a:lstStyle/>
               <a:p>
                 <a:r>
-                  <a:t>单元格2</a:t>
+                  <a:t>单元格 2</a:t>
                 </a:r>
               </a:p>
             </a:txBody>
@@ -308,7 +308,7 @@
       <p:ph type="body" idx="1"/>
     </p:nvPr>
   </p:nvSpPr>
-  <!-- 内容正文 -->
+  <!-- 内容主体 -->
 </p:sp>
 ```
 
@@ -316,26 +316,26 @@
 
 添加内容时，更新这些文件：
 
-**`ppt/_rels/presentation.xml.rels`:**
+**`ppt/_rels/presentation.xml.rels`：**
 ```xml
 <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide1.xml"/>
 <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster" Target="slideMasters/slideMaster1.xml"/>
 ```
 
-**`ppt/slides/_rels/slide1.xml.rels`:**
+**`ppt/slides/_rels/slide1.xml.rels`：**
 ```xml
 <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/>
 <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image1.png"/>
 ```
 
-**`[Content_Types].xml`:**
+**`[Content_Types].xml`：**
 ```xml
 <Default Extension="png" ContentType="image/png"/>
 <Default Extension="jpg" ContentType="image/jpeg"/>
 <Override PartName="/ppt/slides/slide1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>
 ```
 
-**`ppt/presentation.xml`:**
+**`ppt/presentation.xml`：**
 ```xml
 <p:sldIdLst>
   <p:sldId id="256" r:id="rId1"/>
@@ -343,7 +343,7 @@
 </p:sldIdLst>
 ```
 
-**`docProps/app.xml`:** 更新幻灯片计数和统计信息
+**`docProps/app.xml`：** 更新幻灯片计数和统计信息
 ```xml
 <Slides>2</Slides>
 <Paragraphs>10</Paragraphs>
@@ -353,26 +353,26 @@
 ## 幻灯片操作
 
 ### 添加新幻灯片
-在演示文稿末尾添加幻灯片时：
+当在演示文稿末尾添加幻灯片时：
 
 1. **创建幻灯片文件**（`ppt/slides/slideN.xml`）
-2. **更新`[Content_Types].xml`**：为新幻灯片添加Override
-3. **更新`ppt/_rels/presentation.xml.rels`**：为新幻灯片添加关系
-4. **更新`ppt/presentation.xml`**：向`<p:sldIdLst>`添加幻灯片ID
-5. **创建幻灯片关系**（`ppt/slides/_rels/slideN.xml.rels`）如果需要
-6. **更新`docProps/app.xml`**：增加幻灯片计数并更新统计信息（如果存在）
+2. **更新 `[Content_Types].xml`**：为新幻灯片添加 Override
+3. **更新 `ppt/_rels/presentation.xml.rels`**：为新幻灯片添加关系
+4. **更新 `ppt/presentation.xml`**：在 `<p:sldIdLst>` 中添加幻灯片 ID
+5. **创建幻灯片关系**（`ppt/slides/_rels/slideN.xml.rels`），如果需要
+6. **更新 `docProps/app.xml`**：增加幻灯片计数并更新统计信息（如果存在）
 
 ### 复制幻灯片
-1. 使用新名称复制源幻灯片XML文件
-2. 更新新幻灯片中的所有ID以使其唯一
+1. 复制源幻灯片 XML 文件并赋予新名称
+2. 更新新幻灯片中的所有 ID 以确保唯一性
 3. 按照上面的"添加新幻灯片"步骤操作
-4. **关键**：在`_rels`文件中删除或更新任何备注幻灯片引用
+4. **关键**：在 `_rels` 文件中删除或更新任何备注幻灯片引用
 5. 删除对未使用媒体文件的引用
 
 ### 重新排序幻灯片
-1. **更新`ppt/presentation.xml`**：重新排序`<p:sldIdLst>`中的`<p:sldId>`元素
-2. `<p:sldId>`元素的顺序决定幻灯片顺序
-3. 保持幻灯片ID和关系ID不变
+1. **更新 `ppt/presentation.xml`**：重新排序 `<p:sldIdLst>` 中的 `<p:sldId>` 元素
+2. `<p:sldId>` 元素的顺序决定幻灯片顺序
+3. 保持幻灯片 ID 和关系 ID 不变
 
 示例：
 ```xml
@@ -383,7 +383,7 @@
   <p:sldId id="258" r:id="rId4"/>
 </p:sldIdLst>
 
-<!-- 将幻灯片3移动到位置2后 -->
+<!-- 将幻灯片 3 移动到位置 2 后 -->
 <p:sldIdLst>
   <p:sldId id="256" r:id="rId2"/>
   <p:sldId id="258" r:id="rId4"/>
@@ -392,35 +392,35 @@
 ```
 
 ### 删除幻灯片
-1. **从`ppt/presentation.xml`中移除**：删除`<p:sldId>`条目
-2. **从`ppt/_rels/presentation.xml.rels`中移除**：删除关系
-3. **从`[Content_Types].xml`中移除**：删除Override条目
-4. **删除文件**：删除`ppt/slides/slideN.xml`和`ppt/slides/_rels/slideN.xml.rels`
-5. **更新`docProps/app.xml`**：减少幻灯片计数并更新统计信息
-6. **清理未使用的媒体**：从`ppt/media/`中删除孤立的图像
+1. **从 `ppt/presentation.xml` 中移除**：删除 `<p:sldId>` 条目
+2. **从 `ppt/_rels/presentation.xml.rels` 中移除**：删除关系
+3. **从 `[Content_Types].xml` 中移除**：删除 Override 条目
+4. **删除文件**：删除 `ppt/slides/slideN.xml` 和 `ppt/slides/_rels/slideN.xml.rels`
+5. **更新 `docProps/app.xml`**：减少幻灯片计数并更新统计信息
+6. **清理未使用的媒体**：从 `ppt/media/` 中删除孤立的图像
 
-注意：不要重新编号剩余的幻灯片 - 保持它们原始的ID和文件名。
+注意：不要重新编号剩余的幻灯片 - 保持它们原始的 ID 和文件名。
 
-## 常见错误避免
+## 要避免的常见错误
 
-- **编码**：在ASCII内容中转义unicode字符：`"`变为`&#8220;`
-- **图像**：添加到`ppt/media/`并更新关系文件
+- **编码**：在 ASCII 内容中转义 unicode 字符：`"` 变为 `&#8220;`
+- **图像**：添加到 `ppt/media/` 并更新关系文件
 - **列表**：从列表标题中省略项目符号
-- **ID**：为UUID使用有效的十六进制值
-- **主题**：检查`theme`目录中的所有主题颜色
+- **ID**：为 UUID 使用有效的十六进制值
+- **主题**：检查 `theme` 目录中的所有主题颜色
 
 ## 基于模板的演示文稿验证清单
 
 ### 打包前始终：
 - **清理未使用的资源**：删除未引用的媒体、字体和备注目录
-- **修复Content_Types.xml**：声明包中存在的所有幻灯片、布局和主题
-- **修复关系ID**：
+- **修复 Content_Types.xml**：声明包中存在的所有幻灯片、布局和主题
+- **修复关系 ID**：
    - 如果不使用嵌入字体，删除字体嵌入引用
-- **删除损坏的引用**：检查所有`_rels`文件中对已删除资源的引用
+- **删除损坏的引用**：检查所有 `_rels` 文件是否有对已删除资源的引用
 
 ### 常见模板复制陷阱：
 - 复制后多个幻灯片引用相同的备注幻灯片
 - 来自模板幻灯片的图像/媒体引用不再存在
 - 未包含字体时的字体嵌入引用
-- 布局12-25缺少slideLayout声明
-- docProps目录可能不解包 - 这是可选的
+- 缺少布局 12-25 的 slideLayout 声明
+- docProps 目录可能不解包 - 这是可选的

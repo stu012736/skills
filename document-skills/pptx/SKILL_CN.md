@@ -1,1188 +1,478 @@
-# PPTX文档操作技能指南
-
-本指南提供使用Python和JavaScript创建、编辑和分析PowerPoint演示文稿（PPTX文件）的全面技能。
+# PPTX 创建、编辑和分析
 
 ## 概述
 
-PowerPoint演示文稿（.pptx文件）是Microsoft Office Open XML格式的文档，包含幻灯片、布局、主题和多媒体内容。本指南涵盖从基本操作到高级功能的完整工作流程。
+用户可能要求您创建、编辑或分析 .pptx 文件的内容。.pptx 文件本质上是一个包含 XML 文件和其他资源的 ZIP 存档，您可以读取或编辑这些内容。针对不同的任务，您有不同的工具和工作流程可用。
 
-## 目录
+## 读取和分析内容
 
-1. [Python库选择](#python库选择)
-2. [基本PPTX操作](#基本pptx操作)
-3. [幻灯片创建和编辑](#幻灯片创建和编辑)
-4. [样式和格式](#样式和格式)
-5. [图表和图形](#图表和图形)
-6. [多媒体内容](#多媒体内容)
-7. [模板使用](#模板使用)
-8. [分析和提取](#分析和提取)
-9. [JavaScript解决方案](#javascript解决方案)
-10. [最佳实践](#最佳实践)
+### 文本提取
+如果您只需要读取演示文稿的文本内容，应将文档转换为 markdown：
 
----
-
-## Python库选择
-
-### 主要库比较
-
-| 库名称 | 主要功能 | 优点 | 缺点 |
-|--------|----------|------|------|
-| **python-pptx** | 创建和编辑PPTX | 功能全面，文档完善 | 不支持读取现有文件的所有属性 |
-| **Aspose.Slides** | 企业级PPTX处理 | 功能强大，支持复杂操作 | 商业许可，价格较高 |
-| **pptx2pdf** | PPTX到PDF转换 | 转换质量高 | 功能单一 |
-| **python-pptx-template** | 模板填充 | 简化模板使用 | 依赖python-pptx |
-
-### 推荐工作流程
-
-```python
-# 根据需求选择库
-def select_pptx_library(requirements):
-    """根据需求选择合适的PPTX库"""
-    if requirements.get('create_new'):
-        return 'python-pptx'
-    elif requirements.get('enterprise_features'):
-        return 'Aspose.Slides'
-    elif requirements.get('template_filling'):
-        return 'python-pptx-template'
-    elif requirements.get('conversion_only'):
-        return 'pptx2pdf'
-    else:
-        return 'python-pptx'  # 默认选择
+```bash
+# 将文档转换为 markdown
+python -m markitdown path-to-file.pptx
 ```
 
-## 基本PPTX操作
+### 原始 XML 访问
+对于以下功能需要原始 XML 访问：注释、演讲者备注、幻灯片布局、动画、设计元素和复杂格式。对于任何这些功能，您需要解包演示文稿并读取其原始 XML 内容。
 
-### 安装和设置
-```python
-# 安装python-pptx
-pip install python-pptx
+#### 解包文件
+`python ooxml/scripts/unpack.py <office_file> <output_dir>`
 
-# 验证安装
-from pptx import Presentation
-print("python-pptx安装成功")
+**注意**：unpack.py 脚本位于相对于项目根目录的 `skills/pptx/ooxml/scripts/unpack.py`。如果此路径不存在脚本，请使用 `find . -name "unpack.py"` 来定位它。
+
+#### 关键文件结构
+* `ppt/presentation.xml` - 主要演示文稿元数据和幻灯片引用
+* `ppt/slides/slide{N}.xml` - 单个幻灯片内容（slide1.xml、slide2.xml 等）
+* `ppt/notesSlides/notesSlide{N}.xml` - 每个幻灯片的演讲者备注
+* `ppt/comments/modernComment_*.xml` - 特定幻灯片的注释
+* `ppt/slideLayouts/` - 幻灯片布局模板
+* `ppt/slideMasters/` - 母版幻灯片模板
+* `ppt/theme/` - 主题和样式信息
+* `ppt/media/` - 图像和其他媒体文件
+
+#### 排版和颜色提取
+**当给定要模仿的示例设计时**：始终首先使用以下方法分析演示文稿的排版和颜色：
+1. **读取主题文件**：检查 `ppt/theme/theme1.xml` 中的颜色（`<a:clrScheme>`）和字体（`<a:fontScheme>`）
+2. **采样幻灯片内容**：检查 `ppt/slides/slide1.xml` 中的实际字体使用（`<a:rPr>`）和颜色
+3. **搜索模式**：使用 grep 在所有 XML 文件中查找颜色（`<a:solidFill>`、`<a:srgbClr>`）和字体引用
+
+## 创建新的 PowerPoint 演示文稿（无模板）
+
+当从头开始创建新的 PowerPoint 演示文稿时，使用 **html2pptx** 工作流程将 HTML 幻灯片转换为具有精确定位的 PowerPoint。
+
+### 设计原则
+
+**关键**：在创建任何演示文稿之前，分析内容并选择适当的设计元素：
+1. **考虑主题**：这个演示文稿是关于什么的？它暗示了什么基调、行业或氛围？
+2. **检查品牌**：如果用户提到公司/组织，请考虑其品牌颜色和身份
+3. **将调色板与内容匹配**：选择反映主题的颜色
+4. **陈述您的方法**：在编写代码之前解释您的设计选择
+
+**要求**：
+- ✅ 在编写代码之前陈述您基于内容的设计方法
+- ✅ 仅使用 Web 安全字体：Arial、Helvetica、Times New Roman、Georgia、Courier、Verdana、Tahoma、Trebuchet MS、Impact
+- ✅ 通过大小、粗细和颜色创建清晰的视觉层次结构
+- ✅ 确保可读性：强对比度、适当大小的文本、干净的对齐方式
+- ✅ 保持一致：在幻灯片中重复模式、间距和视觉语言
+
+#### 颜色调色板选择
+
+**创造性地选择颜色**：
+- **超越默认值**：哪些颜色真正匹配这个特定主题？避免自动选择。
+- **考虑多个角度**：主题、行业、氛围、能量水平、目标受众、品牌身份（如果提到）
+- **敢于尝试**：尝试意想不到的组合 - 医疗保健演示文稿不必是绿色，金融不必是海军蓝
+- **构建您的调色板**：选择 3-5 种协同工作的颜色（主色 + 辅助色调 + 强调色）
+- **确保对比度**：文本必须在背景上清晰可读
+
+**示例颜色调色板**（使用这些来激发创造力 - 选择一个、调整它或创建您自己的）：
+
+1. **经典蓝色**：深海军蓝 (#1C2833)、石板灰 (#2E4053)、银色 (#AAB7B8)、米白色 (#F4F6F6)
+2. **蓝绿色和珊瑚色**：蓝绿色 (#5EA8A7)、深蓝绿色 (#277884)、珊瑚色 (#FE4447)、白色 (#FFFFFF)
+3. **大胆红色**：红色 (#C0392B)、亮红色 (#E74C3C)、橙色 (#F39C12)、黄色 (#F1C40F)、绿色 (#2ECC71)
+4. **温暖腮红**：淡紫色 (#A49393)、腮红 (#EED6D3)、玫瑰色 (#E8B4B8)、奶油色 (#FAF7F2)
+5. **勃艮第奢华**：勃艮第 (#5D1D2E)、深红色 (#951233)、铁锈色 (#C15937)、金色 (#997929)
+6. **深紫色和祖母绿**：紫色 (#B165FB)、深蓝色 (#181B24)、祖母绿 (#40695B)、白色 (#FFFFFF)
+7. **奶油色和森林绿**：奶油色 (#FFE1C7)、森林绿 (#40695B)、白色 (#FCFCFC)
+8. **粉色和紫色**：粉色 (#F8275B)、珊瑚色 (#FF574A)、玫瑰色 (#FF737D)、紫色 (#3D2F68)
+9. **酸橙色和李子色**：酸橙色 (#C5DE82)、李子色 (#7C3A5F)、珊瑚色 (#FD8C6E)、蓝灰色 (#98ACB5)
+10. **黑色和金色**：金色 (#BF9A4A)、黑色 (#000000)、奶油色 (#F4F6F6)
+11. **鼠尾草色和赤陶色**：鼠尾草色 (#87A96B)、赤陶色 (#E07A5F)、奶油色 (#F4F1DE)、炭灰色 (#2C2C2C)
+12. **炭灰色和红色**：炭灰色 (#292929)、红色 (#E33737)、浅灰色 (#CCCBCB)
+13. **鲜艳橙色**：橙色 (#F96D00)、浅灰色 (#F2F2F2)、炭灰色 (#222831)
+14. **森林绿**：黑色 (#191A19)、绿色 (#4E9F3D)、深绿色 (#1E5128)、白色 (#FFFFFF)
+15. **复古彩虹**：紫色 (#722880)、粉色 (#D72D51)、橙色 (#EB5C18)、琥珀色 (#F08800)、金色 (#DEB600)
+16. **复古大地色**：芥末色 (#E3B448)、鼠尾草色 (#CBD18F)、森林绿 (#3A6B35)、奶油色 (#F4F1DE)
+17. **海岸玫瑰色**：旧玫瑰色 (#AD7670)、海狸色 (#B49886)、蛋壳色 (#F3ECDC)、灰灰色 (#BFD5BE)
+18. **橙色和绿松石色**：浅橙色 (#FC993E)、灰绿松石色 (#667C6F)、白色 (#FCFCFC)
+
+#### 视觉细节选项
+
+**几何图案**：
+- 对角线部分分隔器而不是水平分隔器
+- 不对称列宽（30/70、40/60、25/75）
+- 旋转文本标题为 90° 或 270°
+- 图像的圆形/六边形框架
+- 角落的三角形装饰形状
+- 重叠形状以增加深度
+
+**边框和框架处理**：
+- 仅在一侧的厚单色边框（10-20pt）
+- 对比色的双线边框
+- 角括号而不是完整框架
+- L 形边框（上+左或下+右）
+- 标题下方的下划线装饰（3-5pt 厚）
+
+**排版处理**：
+- 极端大小对比（72pt 标题 vs 11pt 正文）
+- 大写标题，字母间距宽
+- 超大显示类型的编号部分
+- 数据/统计/技术内容的等宽字体（Courier New）
+- 密集信息的压缩字体（Arial Narrow）
+- 强调的轮廓文本
+
+**图表和数据样式**：
+- 单色图表，关键数据使用单一强调色
+- 水平条形图而不是垂直条形图
+- 点图而不是条形图
+- 最小网格线或完全没有
+- 元素上的直接数据标签（无图例）
+- 关键指标的过大数字
+
+**布局创新**：
+- 全出血图像，带文本叠加
+- 侧边栏列（20-30% 宽度）用于导航/上下文
+- 模块化网格系统（3×3、4×4 块）
+- Z 模式或 F 模式内容流
+- 彩色形状上的浮动文本框
+- 杂志风格的多列布局
+
+**背景处理**：
+- 占据幻灯片 40-60% 的实色块
+- 渐变填充（仅垂直或对角线）
+- 分割背景（两种颜色，对角线或垂直）
+- 边到边的色带
+- 负空间作为设计元素
+
+### 布局技巧
+**创建带有图表或表格的幻灯片时**：
+- **两列布局（首选）**：使用跨越全宽的标题，然后在下方使用两列 - 一列用于文本/项目符号，另一列用于特色内容。这提供了更好的平衡，并使图表/表格更易读。使用具有不等列宽（例如，40%/60% 分割）的 flexbox 来优化每种内容类型的空间。
+- **全幻灯片布局**：让特色内容（图表/表格）占据整个幻灯片以获得最大影响和可读性
+- **切勿垂直堆叠**：不要将图表/表格放在单列文本下方 - 这会导致可读性差和布局问题
+
+### 工作流程
+1. **强制 - 阅读完整文件**：从头到尾完整阅读 [`html2pptx.md`](html2pptx.md)。**阅读此文件时切勿设置任何范围限制。** 在继续演示文稿创建之前，阅读完整文件内容以获取详细语法、关键格式规则和最佳实践。
+2. 为每个幻灯片创建具有适当尺寸的 HTML 文件（例如，16:9 为 720pt × 405pt）
+   - 对所有文本内容使用 `<p>`、`<h1>`-`<h6>`、`<ul>`、`<ol>`
+   - 使用 `class="placeholder"` 用于将添加图表/表格的区域（使用灰色背景渲染以提高可见性）
+   - **关键**：首先使用 Sharp 将渐变和图标栅格化为 PNG 图像，然后在 HTML 中引用
+   - **布局**：对于带有图表/表格/图像的幻灯片，使用全幻灯片布局或两列布局以获得更好的可读性
+3. 创建并运行使用 [`html2pptx.js`](scripts/html2pptx.js) 库的 JavaScript 文件，将 HTML 幻灯片转换为 PowerPoint 并保存演示文稿
+   - 使用 `html2pptx()` 函数处理每个 HTML 文件
+   - 使用 PptxGenJS API 将图表和表格添加到占位符区域
+   - 使用 `pptx.writeFile()` 保存演示文稿
+4. **视觉验证**：生成缩略图并检查布局问题
+   - 创建缩略图网格：`python scripts/thumbnail.py output.pptx workspace/thumbnails --cols 4`
+   - 读取并仔细检查缩略图图像：
+     - **文本截断**：文本被标题栏、形状或幻灯片边缘截断
+     - **文本重叠**：文本与其他文本或形状重叠
+     - **定位问题**：内容太靠近幻灯片边界或其他元素
+     - **对比度问题**：文本和背景之间的对比度不足
+   - 如果发现问题，调整 HTML 边距/间距/颜色并重新生成演示文稿
+   - 重复直到所有幻灯片在视觉上正确
+
+## 编辑现有的 PowerPoint 演示文稿
+
+当编辑现有 PowerPoint 演示文稿中的幻灯片时，您需要处理原始 Office Open XML (OOXML) 格式。这涉及解包 .pptx 文件、编辑 XML 内容并重新打包。
+
+### 工作流程
+1. **强制 - 阅读完整文件**：从头到尾完整阅读 [`ooxml.md`](ooxml.md)（约 500 行）。**阅读此文件时切勿设置任何范围限制。** 在任何演示文稿编辑之前，阅读完整文件内容以获取 OOXML 结构和编辑工作流程的详细指南。
+2. 解包演示文稿：`python ooxml/scripts/unpack.py <office_file> <output_dir>`
+3. 编辑 XML 文件（主要是 `ppt/slides/slide{N}.xml` 和相关文件）
+4. **关键**：每次编辑后立即验证并在继续之前修复任何验证错误：`python ooxml/scripts/validate.py <dir> --original <file>`
+5. 打包最终演示文稿：`python ooxml/scripts/pack.py <input_directory> <office_file>`
+
+## 创建新的 PowerPoint 演示文稿（使用模板）
+
+当您需要创建遵循现有模板设计的演示文稿时，您需要复制和重新排列模板幻灯片，然后替换占位符内容。
+
+### 工作流程
+1. **提取模板文本并创建视觉缩略图网格**：
+   * 提取文本：`python -m markitdown template.pptx > template-content.md`
+   * 读取 `template-content.md`：阅读完整文件以了解模板演示文稿的内容。**阅读此文件时切勿设置任何范围限制。**
+   * 创建缩略图网格：`python scripts/thumbnail.py template.pptx`
+   * 有关更多详细信息，请参阅[创建缩略图网格](#创建缩略图网格)部分
+
+2. **分析模板并将清单保存到文件**：
+   * **视觉分析**：查看缩略图网格以了解幻灯片布局、设计模式和视觉结构
+   * 在 `template-inventory.md` 创建并保存模板清单文件，包含：
+     ```markdown
+     # 模板清单分析
+     **总幻灯片数：[count]**
+     **重要：幻灯片是 0 索引的（第一张幻灯片 = 0，最后一张幻灯片 = count-1）**
+
+     ## [类别名称]
+     - 幻灯片 0：[布局代码（如果可用）] - 描述/目的
+     - 幻灯片 1：[布局代码] - 描述/目的
+     - 幻灯片 2：[布局代码] - 描述/目的
+     [... 每张幻灯片必须单独列出其索引 ...]
+     ```
+   * **使用缩略图网格**：参考视觉缩略图来识别：
+     - 布局模式（标题幻灯片、内容布局、部分分隔器）
+     - 图像占位符位置和数量
+     - 幻灯片组之间的设计一致性
+     - 视觉层次结构和结构
+   * 此清单文件是下一步选择适当模板所必需的
+
+3. **基于模板清单创建演示文稿大纲**：
+   * 从步骤 2 查看可用模板。
+   * 为第一张幻灯片选择介绍或标题模板。这应该是第一个模板之一。
+   * 为其他幻灯片选择安全的、基于文本的布局。
+   * **关键：将布局结构与实际内容匹配**：
+     - 单列布局：用于统一叙述或单一主题
+     - 两列布局：仅当您有恰好 2 个不同项目/概念时使用
+     - 三列布局：仅当您有恰好 3 个不同项目/概念时使用
+     - 图像 + 文本布局：仅当您有实际图像要插入时使用
+     - 引用布局：仅用于实际人物引用（带归属），绝不用于强调
+     - 切勿使用占位符多于您有内容的布局
+     - 如果您有 2 个项目，不要将它们强制放入 3 列布局
+     - 如果您有 4+ 个项目，考虑分成多个幻灯片或使用列表格式
+   * 在选择布局之前计算您的实际内容片段
+   * 验证所选布局中的每个占位符都将填充有意义的内容
+   * 为每个内容部分选择代表**最佳**布局的一个选项。
+   * 保存 `outline.md`，其中包含利用可用设计的内容和模板映射
+   * 示例模板映射：
+     ```
+     # 要使用的模板幻灯片（0 基索引）
+     # 警告：验证索引在范围内！具有 73 张幻灯片的模板具有索引 0-72
+     # 映射：大纲中的幻灯片编号 -> 模板幻灯片索引
+     template_mapping = [
+         0,   # 使用幻灯片 0（标题/封面）
+         34,  # 使用幻灯片 34（B1：标题和正文）
+         34,  # 再次使用幻灯片 34（为第二个 B1 复制）
+         50,  # 使用幻灯片 50（E1：引用）
+         54,  # 使用幻灯片 54（F2：结束 + 文本）
+     ]
+     ```
+
+4. **使用 `rearrange.py` 复制、重新排序和删除幻灯片**：
+   * 使用 `scripts/rearrange.py` 脚本创建具有所需顺序幻灯片的新演示文稿：
+     ```bash
+     python scripts/rearrange.py template.pptx working.pptx 0,34,34,50,52
+     ```
+   * 脚本处理重复幻灯片、删除未使用的幻灯片和自动重新排序
+   * 幻灯片索引是 0 基的（第一张幻灯片是 0，第二张是 1，等等）
+   * 同一幻灯片索引可以出现多次以复制该幻灯片
+
+5. **使用 `inventory.py` 脚本提取所有文本**：
+   * **运行清单提取**：
+     ```bash
+     python scripts/inventory.py working.pptx text-inventory.json
+     ```
+   * **读取 text-inventory.json**：阅读完整的 text-inventory.json 文件以了解所有形状及其属性。**阅读此文件时切勿设置任何范围限制。**
+
+   * 清单 JSON 结构：
+     ```json
+     {
+       "slide-0": {
+         "shape-0": {
+           "placeholder_type": "TITLE",  // 或 null 表示非占位符
+           "left": 1.5,                  // 位置（英寸）
+           "top": 2.0,
+           "width": 7.5,
+           "height": 1.2,
+           "paragraphs": [
+             {
+               "text": "段落文本",
+               // 可选属性（仅包含非默认值时）：
+               "bullet": true,           // 检测到显式项目符号
+               "level": 0,               // 仅当 bullet 为 true 时包含
+               "alignment": "CENTER",    // CENTER, RIGHT（不是 LEFT）
+               "space_before": 10.0,     // 段落前间距（点）
+               "space_after": 6.0,       // 段落后间距（点）
+               "line_spacing": 22.4,     // 行间距（点）
+               "font_name": "Arial",     // 来自第一个运行
+               "font_size": 14.0,        // 点
+               "bold": true,
+               "italic": false,
+               "underline": false,
+               "color": "FF0000"         // RGB 颜色
+             }
+           ]
+         }
+       }
+     }
+     ```
+
+   * 关键特性：
+     - **幻灯片**：命名为 "slide-0"、"slide-1" 等
+     - **形状**：按视觉位置（从上到下，从左到右）排序为 "shape-0"、"shape-1" 等
+     - **占位符类型**：TITLE、CENTER_TITLE、SUBTITLE、BODY、OBJECT 或 null
+     - **默认字体大小**：从布局占位符提取的 `default_font_size`（点）（如果可用）
+     - **幻灯片编号已过滤**：具有 SLIDE_NUMBER 占位符类型的形状自动从清单中排除
+     - **项目符号**：当 `bullet: true` 时，`level` 始终包含（即使为 0）
+     - **间距**：`space_before`、`space_after` 和 `line_spacing`（点）（仅设置时包含）
+     - **颜色**：`color` 用于 RGB（例如 "FF0000"），`theme_color` 用于主题颜色（例如 "DARK_1"）
+     - **属性**：仅非默认值包含在输出中
+
+6. **生成替换文本并将数据保存到 JSON 文件**
+   基于上一步的文本清单：
+   - **关键**：首先验证清单中存在哪些形状 - 仅引用实际存在的形状
+   - **验证**：replace.py 脚本将验证您的替换 JSON 中的所有形状是否存在于清单中
+     - 如果您引用不存在的形状，您将收到显示可用形状的错误
+     - 如果您引用不存在的幻灯片，您将收到指示幻灯片不存在的错误
+     - 所有验证错误在脚本退出前一次性显示
+   - **重要**：replace.py 脚本在内部使用 inventory.py 来识别所有文本形状
+   - **自动清除**：除非您为它们提供 "paragraphs"，否则清单中的所有文本形状将被清除
+   - 向需要内容的形状添加 "paragraphs" 字段（不是 "replacement_paragraphs"）
+   - 替换 JSON 中没有 "paragraphs" 的形状将自动清除其文本
+   - 具有项目符号的段落将自动左对齐。当 `"bullet": true` 时，不要在段落上设置 `alignment` 属性
+   - 为占位符文本生成适当的替换内容
+   - 使用形状大小确定适当的内容长度
+   - **关键**：包含来自原始清单的段落属性 - 不要只提供文本
+   - **重要**：当 bullet: true 时，不要在文本中包含项目符号（•, -, *） - 它们会自动添加
+   - **基本格式规则**：
+     - 标题/标题通常应具有 `"bold": true`
+     - 列表项应具有 `"bullet": true, "level": 0`（当 bullet 为 true 时 level 是必需的）
+     - 保留任何对齐属性（例如，居中文本的 `"alignment": "CENTER"`）
+     - 当与默认值不同时包含字体属性（例如，`"font_size": 14.0`、`"font_name": "Lora"`）
+     - 颜色：使用 `"color": "FF0000"` 用于 RGB 或 `"theme_color": "DARK_1"` 用于主题颜色
+     - 替换脚本期望**正确格式化的段落**，而不仅仅是文本字符串
+     - **重叠形状**：优先选择具有较大 default_font_size 或更适当 placeholder_type 的形状
+   - 将带有替换的更新清单保存到 `replacement-text.json`
+   - **警告**：不同的模板布局具有不同的形状计数 - 在创建替换之前始终检查实际清单
+
+   显示正确格式的示例 paragraphs 字段：
+   ```json
+   "paragraphs": [
+     {
+       "text": "新演示文稿标题文本",
+       "alignment": "CENTER",
+       "bold": true
+     },
+     {
+       "text": "部分标题",
+       "bold": true
+     },
+     {
+       "text": "第一个项目符号点，不带项目符号",
+       "bullet": true,
+       "level": 0
+     },
+     {
+       "text": "红色文本",
+       "color": "FF0000"
+     },
+     {
+       "text": "主题颜色文本",
+       "theme_color": "DARK_1"
+     },
+     {
+       "text": "没有特殊格式的常规段落文本"
+     }
+   ]
+   ```
+
+   **替换 JSON 中未列出的形状将自动清除**：
+   ```json
+   {
+     "slide-0": {
+       "shape-0": {
+         "paragraphs": [...] // 此形状获得新文本
+       }
+       // 清单中的 shape-1 和 shape-2 将自动清除
+     }
+   }
+   ```
+
+   **演示文稿的常见格式模式**：
+   - 标题幻灯片：粗体文本，有时居中
+   - 幻灯片内的部分标题：粗体文本
+   - 项目符号列表：每个项目需要 `"bullet": true, "level": 0`
+   - 正文文本：通常不需要特殊属性
+   - 引用：可能有特殊的对齐或字体属性
+
+7. **使用 `replace.py` 脚本应用替换**
+   ```bash
+   python scripts/replace.py working.pptx replacement-text.json output.pptx
+   ```
+
+   脚本将：
+   - 首先使用 inventory.py 中的函数提取所有文本形状的清单
+   - 验证替换 JSON 中的所有形状是否存在于清单中
+   - 清除清单中识别的所有形状的文本
+   - 仅将新文本应用于替换 JSON 中定义了 "paragraphs" 的形状
+   - 通过应用 JSON 中的段落属性来保留格式
+   - 自动处理项目符号、对齐方式、字体属性和颜色
+   - 保存更新的演示文稿
+
+   示例验证错误：
+   ```
+   错误：替换 JSON 中的无效形状：
+     - 在 'slide-0' 上未找到形状 'shape-99'。可用形状：shape-0, shape-1, shape-4
+     - 在清单中未找到幻灯片 'slide-999'
+   ```
+
+   ```
+   错误：替换文本使这些形状的溢出更糟：
+     - slide-0/shape-2：溢出恶化 1.25"（原为 0.00"，现在 1.25"）
+   ```
+
+## 创建缩略图网格
+
+为 PowerPoint 幻灯片创建视觉缩略图网格，用于快速分析和参考：
+
+```bash
+python scripts/thumbnail.py template.pptx [output_prefix]
 ```
 
-### 创建新演示文稿
-```python
-from pptx import Presentation
-from pptx.util import Inches
+**特性**：
+- 创建：`thumbnails.jpg`（或 `thumbnails-1.jpg`、`thumbnails-2.jpg` 等，用于大型套牌）
+- 默认：5 列，每网格最多 30 张幻灯片（5×6）
+- 自定义前缀：`python scripts/thumbnail.py template.pptx my-grid`
+  - 注意：如果您希望输出在特定目录中，输出前缀应包含路径（例如，`workspace/my-grid`）
+- 调整列数：`--cols 4`（范围：3-6，影响每网格幻灯片数）
+- 网格限制：3 列 = 12 张幻灯片/网格，4 列 = 20，5 列 = 30，6 列 = 42
+- 幻灯片是零索引的（幻灯片 0、幻灯片 1 等）
 
-def create_basic_presentation():
-    """创建基本演示文稿"""
-    # 创建演示文稿对象
-    prs = Presentation()
-    
-    # 添加标题幻灯片
-    slide_layout = prs.slide_layouts[0]  # 标题幻灯片布局
-    slide = prs.slides.add_slide(slide_layout)
-    
-    # 设置标题和副标题
-    title = slide.shapes.title
-    subtitle = slide.placeholders[1]
-    
-    title.text = "我的演示文稿"
-    subtitle.text = "创建于Python"
-    
-    # 保存演示文稿
-    prs.save('basic_presentation.pptx')
-    print("基本演示文稿创建完成")
+**用例**：
+- 模板分析：快速了解幻灯片布局和设计模式
+- 内容审查：整个演示文稿的视觉概览
+- 导航参考：通过视觉外观查找特定幻灯片
+- 质量检查：验证所有幻灯片格式正确
 
-create_basic_presentation()
+**示例**：
+```bash
+# 基本用法
+python scripts/thumbnail.py presentation.pptx
+
+# 组合选项：自定义名称、列数
+python scripts/thumbnail.py template.pptx analysis --cols 4
 ```
 
-### 读取现有演示文稿
-```python
-from pptx import Presentation
+## 将幻灯片转换为图像
 
-def analyze_presentation(file_path):
-    """分析现有演示文稿"""
-    prs = Presentation(file_path)
-    
-    print(f"幻灯片数量: {len(prs.slides)}")
-    print(f"幻灯片布局数量: {len(prs.slide_layouts)}")
-    
-    # 分析每个幻灯片
-    for i, slide in enumerate(prs.slides):
-        print(f"\n幻灯片 {i+1}:")
-        print(f"  布局: {slide.slide_layout.name}")
-        print(f"  形状数量: {len(slide.shapes)}")
-        
-        # 分析形状
-        for shape in slide.shapes:
-            if shape.has_text_frame:
-                text = shape.text.strip()
-                if text:
-                    print(f"  文本形状: '{text[:50]}...'")
-    
-    return prs
+要视觉分析 PowerPoint 幻灯片，使用两步过程将它们转换为图像：
 
-# 使用函数
-presentation = analyze_presentation('existing_presentation.pptx')
+1. **将 PPTX 转换为 PDF**：
+   ```bash
+   soffice --headless --convert-to pdf template.pptx
+   ```
+
+2. **将 PDF 页面转换为 JPEG 图像**：
+   ```bash
+   pdftoppm -jpeg -r 150 template.pdf slide
+   ```
+   这将创建像 `slide-1.jpg`、`slide-2.jpg` 等文件。
+
+选项：
+- `-r 150`：设置分辨率为 150 DPI（调整质量/大小平衡）
+- `-jpeg`：输出 JPEG 格式（如果首选 PNG，使用 `-png`）
+- `-f N`：要转换的第一页（例如，`-f 2` 从第 2 页开始）
+- `-l N`：要转换的最后一页（例如，`-l 5` 在第 5 页停止）
+- `slide`：输出文件的前缀
+
+特定范围示例：
+```bash
+pdftoppm -jpeg -r 150 -f 2 -l 5 template.pdf slide  # 仅转换第 2-5 页
 ```
 
-## 幻灯片创建和编辑
-
-### 添加不同类型幻灯片
-```python
-from pptx import Presentation
-from pptx.util import Inches
-
-def create_comprehensive_presentation():
-    """创建包含多种幻灯片类型的演示文稿"""
-    prs = Presentation()
-    
-    # 1. 标题幻灯片
-    title_slide = prs.slides.add_slide(prs.slide_layouts[0])
-    title_slide.shapes.title.text = "综合演示文稿"
-    title_slide.placeholders[1].text = "展示各种幻灯片类型"
-    
-    # 2. 标题和内容幻灯片
-    title_content = prs.slides.add_slide(prs.slide_layouts[1])
-    title_content.shapes.title.text = "主要内容"
-    content = title_content.shapes.placeholders[1]
-    content.text = "• 第一点\n• 第二点\n• 第三点"
-    
-    # 3. 节标题幻灯片
-    section_header = prs.slides.add_slide(prs.slide_layouts[2])
-    section_header.shapes.title.text = "新章节"
-    
-    # 4. 两栏内容幻灯片
-    two_column = prs.slides.add_slide(prs.slide_layouts[3])
-    two_column.shapes.title.text = "两栏布局"
-    
-    # 5. 空白幻灯片（自定义内容）
-    blank_slide = prs.slides.add_slide(prs.slide_layouts[6])
-    
-    # 在空白幻灯片上添加自定义形状
-    left = top = Inches(1)
-    width = height = Inches(1.5)
-    
-    # 添加文本框
-    textbox = blank_slide.shapes.add_textbox(left, top, width, height)
-    text_frame = textbox.text_frame
-    text_frame.text = "自定义内容"
-    
-    # 添加段落
-    p = text_frame.add_paragraph()
-    p.text = "这是自定义添加的文本"
-    p.level = 1
-    
-    prs.save('comprehensive_presentation.pptx')
-    print("综合演示文稿创建完成")
-
-create_comprehensive_presentation()
-```
-
-### 幻灯片操作
-```python
-from pptx import Presentation
-
-def manipulate_slides(input_path, output_path):
-    """幻灯片操作：复制、删除、重新排序"""
-    prs = Presentation(input_path)
-    
-    # 复制第一张幻灯片
-    if len(prs.slides) > 0:
-        original_slide = prs.slides[0]
-        
-        # 创建新幻灯片（复制布局）
-        slide_layout = prs.slide_layouts[0]
-        new_slide = prs.slides.add_slide(slide_layout)
-        
-        # 复制内容（简化版本）
-        new_slide.shapes.title.text = "复制的幻灯片: " + original_slide.shapes.title.text
-    
-    # 删除特定幻灯片（示例：删除第二张）
-    if len(prs.slides) > 1:
-        # 注意：python-pptx不支持直接删除，需要重建
-        print("注意：删除幻灯片需要重建演示文稿")
-    
-    # 重新排序（通过XML操作）
-    def reorder_slides_xml(prs, new_order):
-        """通过XML操作重新排序幻灯片"""
-        slides = list(prs.slides._sldIdLst)
-        
-        # 清除现有顺序
-        prs.slides._sldIdLst.clear()
-        
-        # 按新顺序添加
-        for index in new_order:
-            if 0 <= index < len(slides):
-                prs.slides._sldIdLst.append(slides[index])
-    
-    # 保存修改
-    prs.save(output_path)
-    print(f"幻灯片操作完成: {output_path}")
-
-manipulate_slides('input.pptx', 'modified.pptx')
-```
-
-## 样式和格式
-
-### 文本格式设置
-```python
-from pptx import Presentation
-from pptx.util import Inches, Pt
-from pptx.dml.color import RGBColor
-from pptx.enum.text import MSO_ANCHOR, MSO_AUTO_SIZE
-
-def format_text_styles():
-    """设置文本样式和格式"""
-    prs = Presentation()
-    slide = prs.slides.add_slide(prs.slide_layouts[5])  # 仅标题布局
-    
-    # 设置标题
-    title = slide.shapes.title
-    title.text = "文本格式示例"
-    
-    # 添加文本框
-    left = Inches(1)
-    top = Inches(2)
-    width = Inches(8)
-    height = Inches(4)
-    
-    textbox = slide.shapes.add_textbox(left, top, width, height)
-    text_frame = textbox.text_frame
-    text_frame.word_wrap = True
-    
-    # 清除默认文本
-    text_frame.clear()
-    
-    # 添加格式化文本
-    p = text_frame.paragraphs[0]
-    p.text = "这是普通文本"
-    
-    # 添加带格式的段落
-    p = text_frame.add_paragraph()
-    run = p.add_run()
-    run.text = "这是粗体红色文本"
-    font = run.font
-    font.bold = True
-    font.color.rgb = RGBColor(255, 0, 0)  # 红色
-    font.size = Pt(16)
-    
-    # 添加另一个段落
-    p = text_frame.add_paragraph()
-    run = p.add_run()
-    run.text = "这是斜体蓝色文本"
-    font = run.font
-    font.italic = True
-    font.color.rgb = RGBColor(0, 0, 255)  # 蓝色
-    font.size = Pt(14)
-    
-    # 添加带下划线的文本
-    p = text_frame.add_paragraph()
-    run = p.add_run()
-    run.text = "这是带下划线的文本"
-    font = run.font
-    font.underline = True
-    font.size = Pt(12)
-    
-    prs.save('text_styles.pptx')
-    print("文本样式演示文稿创建完成")
-
-format_text_styles()
-```
-
-### 形状和背景格式
-```python
-from pptx import Presentation
-from pptx.util import Inches
-from pptx.dml.color import RGBColor
-from pptx.enum.shapes import MSO_SHAPE
-
-def format_shapes_and_background():
-    """设置形状和背景格式"""
-    prs = Presentation()
-    slide = prs.slides.add_slide(prs.slide_layouts[6])  # 空白布局
-    
-    # 设置幻灯片背景
-    background = slide.background
-    fill = background.fill
-    fill.solid()
-    fill.fore_color.rgb = RGBColor(240, 248, 255)  # 浅蓝色背景
-    
-    # 添加各种形状
-    shapes_info = [
-        (MSO_SHAPE.RECTANGLE, Inches(1), Inches(1), Inches(2), Inches(1), RGBColor(255, 200, 200)),
-        (MSO_SHAPE.OVAL, Inches(4), Inches(1), Inches(2), Inches(1), RGBColor(200, 255, 200)),
-        (MSO_SHAPE.ROUNDED_RECTANGLE, Inches(1), Inches(3), Inches(2), Inches(1), RGBColor(200, 200, 255)),
-        (MSO_SHAPE.CHEVRON, Inches(4), Inches(3), Inches(2), Inches(1), RGBColor(255, 255, 200)),
-    ]
-    
-    for shape_type, left, top, width, height, color in shapes_info:
-        shape = slide.shapes.add_shape(shape_type, left, top, width, height)
-        
-        # 设置形状填充颜色
-        fill = shape.fill
-        fill.solid()
-        fill.fore_color.rgb = color
-        
-        # 设置形状边框
-        line = shape.line
-        line.color.rgb = RGBColor(0, 0, 0)  # 黑色边框
-        line.width = Pt(2)  # 2磅边框
-        
-        # 添加文本
-        if shape.has_text_frame:
-            shape.text = shape_type.name
-    
-    prs.save('shapes_background.pptx')
-    print("形状和背景格式演示文稿创建完成")
-
-format_shapes_and_background()
-```
-
-## 图表和图形
-
-### 创建图表
-```python
-from pptx import Presentation
-from pptx.util import Inches
-from pptx.chart.data import ChartData
-from pptx.enum.chart import XL_CHART_TYPE
-
-def create_charts():
-    """创建各种图表"""
-    prs = Presentation()
-    
-    # 柱状图幻灯片
-    slide = prs.slides.add_slide(prs.slide_layouts[5])
-    slide.shapes.title.text = "销售数据图表"
-    
-    # 定义图表数据
-    chart_data = ChartData()
-    chart_data.categories = ['第一季度', '第二季度', '第三季度', '第四季度']
-    chart_data.add_series('产品A', (25.4, 30.6, 45.8, 40.2))
-    chart_data.add_series('产品B', (15.2, 25.3, 35.1, 30.5))
-    
-    # 添加柱状图
-    x, y, cx, cy = Inches(1), Inches(2), Inches(8), Inches(5)
-    chart = slide.shapes.add_chart(
-        XL_CHART_TYPE.COLUMN_CLUSTERED, x, y, cx, cy, chart_data
-    ).chart
-    
-    # 饼图幻灯片
-    slide2 = prs.slides.add_slide(prs.slide_layouts[5])
-    slide2.shapes.title.text = "市场份额分布"
-    
-    pie_data = ChartData()
-    pie_data.categories = ['公司A', '公司B', '公司C', '其他']
-    pie_data.add_series('市场份额', (45, 30, 15, 10))
-    
-    x, y, cx, cy = Inches(1), Inches(2), Inches(8), Inches(5)
-    pie_chart = slide2.shapes.add_chart(
-        XL_CHART_TYPE.PIE, x, y, cx, cy, pie_data
-    ).chart
-    
-    # 折线图幻灯片
-    slide3 = prs.slides.add_slide(prs.slide_layouts[5])
-    slide3.shapes.title.text = "趋势分析"
-    
-    line_data = ChartData()
-    line_data.categories = ['1月', '2月', '3月', '4月', '5月', '6月']
-    line_data.add_series('网站访问量', (1200, 1500, 1800, 2100, 1900, 2200))
-    line_data.add_series('移动端访问量', (800, 1200, 1500, 1800, 2000, 2300))
-    
-    x, y, cx, cy = Inches(1), Inches(2), Inches(8), Inches(5)
-    line_chart = slide3.shapes.add_chart(
-        XL_CHART_TYPE.LINE, x, y, cx, cy, line_data
-    ).chart
-    
-    prs.save('charts_presentation.pptx')
-    print("图表演示文稿创建完成")
-
-create_charts()
-```
-
-### 高级图表定制
-```python
-from pptx import Presentation
-from pptx.util import Inches
-from pptx.chart.data import ChartData
-from pptx.enum.chart import XL_CHART_TYPE
-from pptx.dml.color import RGBColor
-
-def customize_charts():
-    """定制图表样式"""
-    prs = Presentation()
-    slide = prs.slides.add_slide(prs.slide_layouts[5])
-    slide.shapes.title.text = "定制图表"
-    
-    # 基础数据
-    chart_data = ChartData()
-    chart_data.categories = ['北京', '上海', '广州', '深圳', '杭州']
-    chart_data.add_series('2023年', (45, 38, 28, 25, 20))
-    chart_data.add_series('2024年', (50, 42, 32, 28, 25))
-    
-    # 创建图表
-    x, y, cx, cy = Inches(1), Inches(2), Inches(8), Inches(5)
-    chart_shape = slide.shapes.add_chart(
-        XL_CHART_TYPE.COLUMN_CLUSTERED, x, y, cx, cy, chart_data
-    )
-    chart = chart_shape.chart
-    
-    # 定制图表样式
-    chart.has_title = True
-    chart.chart_title.text_frame.text = "城市销售数据"
-    
-    # 定制系列颜色
-    series_1 = chart.series[0]
-    series_1.format.fill.solid()
-    series_1.format.fill.fore_color.rgb = RGBColor(65, 105, 225)  # 皇家蓝
-    
-    series_2 = chart.series[1]
-    series_2.format.fill.solid()
-    series_2.format.fill.fore_color.rgb = RGBColor(220, 20, 60)   # 深红色
-    
-    # 定制坐标轴
-    value_axis = chart.value_axis
-    value_axis.has_title = True
-    value_axis.axis_title.text_frame.text = "销售额（万元）"
-    
-    category_axis = chart.category_axis
-    category_axis.has_title = True
-    category_axis.axis_title.text_frame.text = "城市"
-    
-    prs.save('customized_charts.pptx')
-    print("定制图表演示文稿创建完成")
-
-customize_charts()
-```
-
-## 多媒体内容
-
-### 添加图像
-```python
-from pptx import Presentation
-from pptx.util import Inches
-
-def add_images_to_presentation():
-    """向演示文稿添加图像"""
-    prs = Presentation()
-    
-    # 图像幻灯片
-    slide = prs.slides.add_slide(prs.slide_layouts[5])
-    slide.shapes.title.text = "图像展示"
-    
-    # 添加单张图像
-    left = Inches(1)
-    top = Inches(2)
-    width = Inches(4)
-    
-    try:
-        slide.shapes.add_picture('image1.jpg', left, top, width=width)
-    except FileNotFoundError:
-        print("图像文件不存在，创建占位符")
-        # 添加占位符形状
-        from pptx.enum.shapes import MSO_SHAPE
-        placeholder = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, left, top, width, Inches(3))
-        placeholder.text = "图像占位符"
-    
-    # 添加多张图像（网格布局）
-    slide2 = prs.slides.add_slide(prs.slide_layouts[5])
-    slide2.shapes.title.text = "图像网格"
-    
-    image_positions = [
-        (Inches(1), Inches(2), Inches(2.5)),
-        (Inches(4), Inches(2), Inches(2.5)),
-        (Inches(1), Inches(5), Inches(2.5)),
-        (Inches(4), Inches(5), Inches(2.5)),
-    ]
-    
-    for i, (left, top, width) in enumerate(image_positions):
-        try:
-            slide2.shapes.add_picture(f'image{i+1}.jpg', left, top, width=width)
-        except FileNotFoundError:
-            placeholder = slide2.shapes.add_shape(MSO_SHAPE.RECTANGLE, left, top, width, Inches(2))
-            placeholder.text = f"图像 {i+1}"
-    
-    prs.save('images_presentation.pptx')
-    print("图像演示文稿创建完成")
-
-add_images_to_presentation()
-```
-
-### 处理多媒体文件
-```python
-from pptx import Presentation
-from pptx.util import Inches
-
-def handle_media_files():
-    """处理音频和视频文件"""
-    prs = Presentation()
-    
-    # 音频幻灯片
-    slide = prs.slides.add_slide(prs.slide_layouts[5])
-    slide.shapes.title.text = "音频内容"
-    
-    # 添加音频占位符（python-pptx不支持直接添加音频）
-    left = Inches(1)
-    top = Inches(2)
-    width = Inches(3)
-    height = Inches(1)
-    
-    audio_placeholder = slide.shapes.add_textbox(left, top, width, height)
-    audio_placeholder.text = "音频文件: presentation_audio.mp3"
-    
-    # 视频幻灯片
-    slide2 = prs.slides.add_slide(prs.slide_layouts[5])
-    slide2.shapes.title.text = "视频内容"
-    
-    video_placeholder = slide2.shapes.add_textbox(left, top, width, height)
-    video_placeholder.text = "视频文件: presentation_video.mp4"
-    
-    # 添加说明文本
-    left = Inches(1)
-    top = Inches(3.5)
-    width = Inches(8)
-    height = Inches(1)
-    
-    note_box = slide2.shapes.add_textbox(left, top, width, height)
-    note_box.text = "注意：音频和视频文件需要在PowerPoint中手动添加"
-    
-    prs.save('media_presentation.pptx')
-    print("多媒体演示文稿创建完成")
-
-handle_media_files()
-```
-
-## 模板使用
-
-### 基于模板创建演示文稿
-```python
-from pptx import Presentation
-
-def create_from_template():
-    """使用模板创建演示文稿"""
-    try:
-        # 加载模板文件
-        prs = Presentation('template.pptx')
-        print("模板加载成功")
-        
-        # 修改模板内容
-        for slide in prs.slides:
-            for shape in slide.shapes:
-                if shape.has_text_frame:
-                    text = shape.text.strip()
-                    
-                    # 替换模板占位符
-                    if '{{title}}' in text:
-                        shape.text = shape.text.replace('{{title}}', '我的演示文稿')
-                    elif '{{date}}' in text:
-                        shape.text = shape.text.replace('{{date}}', '2024年1月')
-                    elif '{{author}}' in text:
-                        shape.text = shape.text.replace('{{author}}', '张三')
-        
-        prs.save('from_template.pptx')
-        print("基于模板的演示文稿创建完成")
-        
-    except FileNotFoundError:
-        print("模板文件不存在，创建默认演示文稿")
-        # 创建默认演示文稿
-        prs = Presentation()
-        slide = prs.slides.add_slide(prs.slide_layouts[0])
-        slide.shapes.title.text = "默认演示文稿"
-        slide.placeholders[1].text = "模板文件未找到"
-        prs.save('from_template.pptx')
-
-create_from_template()
-```
-
-### 创建自定义模板
-```python
-from pptx import Presentation
-from pptx.util import Inches
-from pptx.dml.color import RGBColor
-
-def create_custom_template():
-    """创建自定义模板"""
-    prs = Presentation()
-    
-    # 定义公司主题颜色
-    primary_color = RGBColor(0, 84, 159)   # 公司主色
-    secondary_color = RGBColor(255, 204, 0) # 公司辅色
-    
-    # 标题幻灯片
-    title_slide = prs.slide_layouts[0]
-    title_slide.background.fill.solid()
-    title_slide.background.fill.fore_color.rgb = primary_color
-    
-    # 内容幻灯片布局
-    content_layout = prs.slide_layouts[1]
-    
-    # 添加公司Logo（占位符）
-    slide = prs.slides.add_slide(title_slide)
-    title = slide.shapes.title
-    subtitle = slide.placeholders[1]
-    
-    title.text = "{{presentation_title}}"
-    subtitle.text = "{{presentation_subtitle}}"
-    
-    # 添加Logo占位符
-    left = Inches(7.5)
-    top = Inches(0.2)
-    width = Inches(1.5)
-    height = Inches(0.5)
-    
-    logo_placeholder = slide.shapes.add_textbox(left, top, width, height)
-    logo_placeholder.text = "{{company_logo}}"
-    
-    # 内容幻灯片示例
-    content_slide = prs.slides.add_slide(content_layout)
-    content_slide.shapes.title.text = "{{slide_title}}"
-    content_slide.placeholders[1].text = "{{slide_content}}"
-    
-    prs.save('custom_template.pptx')
-    print("自定义模板创建完成")
-
-create_custom_template()
-```
-
-## 分析和提取
-
-### 提取演示文稿内容
-```python
-from pptx import Presentation
-import json
-
-def extract_presentation_content(file_path):
-    """提取演示文稿的完整内容"""
-    prs = Presentation(file_path)
-    
-    presentation_data = {
-        'file_name': file_path,
-        'slide_count': len(prs.slides),
-        'slides': [],
-        'metadata': {}
-    }
-    
-    # 提取幻灯片内容
-    for slide_num, slide in enumerate(prs.slides):
-        slide_data = {
-            'slide_number': slide_num + 1,
-            'layout_name': slide.slide_layout.name,
-            'shapes_count': len(slide.shapes),
-            'text_content': [],
-            'images_count': 0
-        }
-        
-        # 提取文本内容
-        for shape in slide.shapes:
-            if shape.has_text_frame:
-                text = shape.text.strip()
-                if text:
-                    slide_data['text_content'].append({
-                        'shape_type': shape.shape_type,
-                        'text': text,
-                        'position': str(shape.left) + "," + str(shape.top)
-                    })
-            
-            # 统计图像
-            if hasattr(shape, 'image'):
-                slide_data['images_count'] += 1
-        
-        presentation_data['slides'].append(slide_data)
-    
-    # 保存提取的数据
-    output_file = file_path.replace('.pptx', '_content.json')
-    with open(output_file, 'w', encoding='utf-8') as f:
-        json.dump(presentation_data, f, ensure_ascii=False, indent=2)
-    
-    print(f"内容提取完成: {output_file}")
-    return presentation_data
-
-# 使用函数
-content_data = extract_presentation_content('sample.pptx')
-```
-
-### 演示文稿分析报告
-```python
-from pptx import Presentation
-from collections import Counter
-
-def analyze_presentation_structure(file_path):
-    """分析演示文稿结构"""
-    prs = Presentation(file_path)
-    
-    analysis = {
-        'basic_info': {
-            'total_slides': len(prs.slides),
-            'layouts_used': [],
-            'average_text_per_slide': 0,
-            'total_text_characters': 0
-        },
-        'layout_analysis': {},
-        'content_analysis': {}
-    }
-    
-    # 分析布局使用情况
-    layout_counter = Counter()
-    text_lengths = []
-    
-    for slide in prs.slides:
-        layout_name = slide.slide_layout.name
-        layout_counter[layout_name] += 1
-        
-        # 分析文本内容
-        slide_text_length = 0
-        for shape in slide.shapes:
-            if shape.has_text_frame:
-                text = shape.text.strip()
-                slide_text_length += len(text)
-        
-        text_lengths.append(slide_text_length)
-        analysis['basic_info']['total_text_characters'] += slide_text_length
-    
-    # 计算统计数据
-    analysis['basic_info']['layouts_used'] = dict(layout_counter)
-    analysis['basic_info']['average_text_per_slide'] = \
-        sum(text_lengths) / len(text_lengths) if text_lengths else 0
-    
-    # 布局分析
-    analysis['layout_analysis'] = {
-        'most_used_layout': layout_counter.most_common(1)[0] if layout_counter else None,
-        'layout_diversity': len(layout_counter),
-        'layout_distribution': dict(layout_counter)
-    }
-    
-    # 内容分析
-    analysis['content_analysis'] = {
-        'text_density': analysis['basic_info']['average_text_per_slide'],
-        'content_balance': {
-            'text_heavy_slides': len([l for l in text_lengths if l > 500]),
-            'minimal_text_slides': len([l for l in text_lengths if l < 100])
-        }
-    }
-    
-    # 生成报告
-    print("=== 演示文稿分析报告 ===")
-    print(f"文件: {file_path}")
-    print(f"总幻灯片数: {analysis['basic_info']['total_slides']}")
-    print(f"使用的布局种类: {analysis['layout_analysis']['layout_diversity']}")
-    print(f"最常用布局: {analysis['layout_analysis']['most_used_layout']}")
-    print(f"平均每张幻灯片文本长度: {analysis['basic_info']['average_text_per_slide']:.0f} 字符")
-    print(f"总文本字符数: {analysis['basic_info']['total_text_characters']}")
-    
-    return analysis
-
-# 使用函数
-analysis_report = analyze_presentation_structure('sample.pptx')
-```
-
-## JavaScript解决方案
-
-### 使用PptxGenJS
-```javascript
-// 在浏览器中生成PPTX
-const pptx = new PptxGenJS();
-
-// 创建标题幻灯片
-let slide = pptx.addSlide();
-slide.addText('JavaScript生成的演示文稿', {
-    x: 1, y: 1, w: '80%', h: 1.5,
-    fontSize: 24, bold: true, align: 'center'
-});
-
-// 添加内容幻灯片
-slide = pptx.addSlide();
-slide.addText('主要内容', { x: 0.5, y: 0.5, fontSize: 20, bold: true });
-
-// 添加项目符号列表
-slide.addText([
-    { text: '第一点', options: { x: 1, y: 1.5, fontSize: 16 } },
-    { text: '第二点', options: { x: 1, y: 2.0, fontSize: 16 } },
-    { text: '第三点', options: { x: 1, y: 2.5, fontSize: 16 } }
-]);
-
-// 添加图表
-slide = pptx.addSlide();
-slide.addChart(pptx.charts.BAR, [
-    { name: '产品A', labels: ['Q1', 'Q2', 'Q3', 'Q4'], values: [25, 30, 45, 40] },
-    { name: '产品B', labels: ['Q1', 'Q2', 'Q3', 'Q4'], values: [15, 25, 35, 30] }
-], { x: 1, y: 1, w: 6, h: 4 });
-
-// 保存PPTX
-pptx.writeFile({ fileName: 'javascript_presentation.pptx' });
-```
-
-### Node.js中的PPTX处理
-```javascript
-// 使用node-pptx库（示例）
-const pptx = require('node-pptx');
-
-async function createPptxWithNode() {
-    // 创建新演示文稿
-    const presentation = new pptx.Presentation();
-    
-    // 添加幻灯片
-    const slide = presentation.addSlide();
-    
-    // 添加标题
-    slide.addText('Node.js生成的PPTX', {
-        x: 100, y: 100, w: 400, h: 50,
-        fontSize: 24, bold: true
-    });
-    
-    // 添加内容
-    slide.addText('使用Node.js创建PowerPoint演示文稿', {
-        x: 100, y: 200, w: 400, h: 30,
-        fontSize: 16
-    });
-    
-    // 保存文件
-    await presentation.save('node_presentation.pptx');
-    console.log('PPTX文件创建完成');
-}
-
-createPptxWithNode().catch(console.error);
-```
-
-## 最佳实践
-
-### 代码组织和可维护性
-```python
-from pptx import Presentation
-from pptx.util import Inches
-import os
-
-class PowerPointGenerator:
-    """PowerPoint生成器类"""
-    
-    def __init__(self, template_path=None):
-        """初始化生成器"""
-        if template_path and os.path.exists(template_path):
-            self.prs = Presentation(template_path)
-        else:
-            self.prs = Presentation()
-        
-        self.slide_count = 0
-    
-    def add_title_slide(self, title, subtitle=""):
-        """添加标题幻灯片"""
-        slide = self.prs.slides.add_slide(self.prs.slide_layouts[0])
-        slide.shapes.title.text = title
-        if subtitle:
-            slide.placeholders[1].text = subtitle
-        self.slide_count += 1
-        return slide
-    
-    def add_content_slide(self, title, content_items):
-        """添加内容幻灯片"""
-        slide = self.prs.slides.add_slide(self.prs.slide_layouts[1])
-        slide.shapes.title.text = title
-        
-        content = slide.placeholders[1]
-        content.text = "\n".join([f"• {item}" for item in content_items])
-        
-        self.slide_count += 1
-        return slide
-    
-    def save(self, file_path):
-        """保存演示文稿"""
-        self.prs.save(file_path)
-        print(f"演示文稿已保存: {file_path} (共 {self.slide_count} 张幻灯片)")
-
-# 使用生成器类
-generator = PowerPointGenerator()
-generator.add_title_slide("项目报告", "2024年第一季度")
-generator.add_content_slide("项目进展", ["任务A已完成", "任务B进行中", "任务C待开始"])
-generator.add_content_slide("成果展示", ["用户增长20%", "收入提升15%", "客户满意度提高"])
-generator.save('project_report.pptx')
-```
-
-### 错误处理和验证
-```python
-import os
-from pathlib import Path
-
-def validate_presentation_file(file_path):
-    """验证PPTX文件"""
-    if not os.path.exists(file_path):
-        raise FileNotFoundError(f"文件不存在: {file_path}")
-    
-    if not file_path.lower().endswith('.pptx'):
-        raise ValueError("文件必须是PPTX格式")
-    
-    file_size = os.path.getsize(file_path)
-    if file_size == 0:
-        raise ValueError("文件为空")
-    
-    if file_size > 50 * 1024 * 1024:  # 50MB限制
-        raise ValueError("文件过大（超过50MB）")
-    
-    return True
-
-def safe_presentation_operation(operation_func, *args, **kwargs):
-    """安全的演示文稿操作包装器"""
-    try:
-        # 验证输入
-        for arg in args:
-            if isinstance(arg, str) and arg.endswith('.pptx'):
-                validate_presentation_file(arg)
-        
-        # 执行操作
-        result = operation_func(*args, **kwargs)
-        print("操作成功完成")
-        return result
-        
-    except Exception as e:
-        print(f"操作失败: {str(e)}")
-        
-        # 清理临时文件
-        temp_files = ['temp.pptx', 'output.pptx']
-        for temp_file in temp_files:
-            if Path(temp_file).exists():
-                Path(temp_file).unlink()
-        
-        return None
-
-# 使用安全操作
-result = safe_presentation_operation(analyze_presentation_structure, 'sample.pptx')
-```
-
-### 性能优化
-```python
-import time
-from functools import wraps
-
-def timing_decorator(func):
-    """计时装饰器"""
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        start_time = time.time()
-        result = func(*args, **kwargs)
-        end_time = time.time()
-        print(f"{func.__name__} 执行时间: {end_time - start_time:.2f}秒")
-        return result
-    return wrapper
-
-@timing_decorator
-def optimize_presentation_creation():
-    """优化演示文稿创建性能"""
-    prs = Presentation()
-    
-    # 批量添加幻灯片（减少重复操作）
-    slide_data = [
-        ("幻灯片1", ["内容1", "内容2", "内容3"]),
-        ("幻灯片2", ["要点A", "要点B", "要点C"]),
-        ("幻灯片3", ["总结1", "总结2", "总结3"]),
-    ]
-    
-    for title, content in slide_data:
-        slide = prs.slides.add_slide(prs.slide_layouts[1])
-        slide.shapes.title.text = title
-        slide.placeholders[1].text = "\n".join([f"• {item}" for item in content])
-    
-    prs.save('optimized_presentation.pptx')
-
-optimize_presentation_creation()
-```
-
-## 总结
-
-本指南提供了使用Python和JavaScript创建、编辑和分析PowerPoint演示文稿的全面技能。通过掌握这些技术，您可以：
-
-1. **高效创建演示文稿**：使用python-pptx库快速生成专业演示文稿
-2. **定制样式和格式**：创建符合品牌标准的定制模板
-3. **添加丰富内容**：包括图表、图像和多媒体元素
-4. **批量处理和分析**：自动化演示文稿的创建和分析流程
-5. **跨平台解决方案**：在浏览器和Node.js环境中生成PPTX
-
-遵循最佳实践，包括错误处理、性能优化和代码组织，可以确保您的PPTX处理代码既可靠又高效。
-
----
-
-*本指南基于python-pptx 0.6.21版本和最新行业最佳实践编写。建议定期检查库的更新和新的功能特性。*
-    
-    # 提取幻灯片内容
-    for slide_num, slide in enumerate(prs.slides):
-        slide_data = {
-            'slide_number': slide_num + 1,
-            'layout_name': slide.slide_layout.name,
-            'shapes_count': len(slide.shapes),
-            'text_content': [],
-            'images_count': 0
-        }
-        
-        # 提取文本内容
-        for shape in slide.shapes:
-            if shape.has_text_frame:
-                text = shape.text.strip()
-                if text:
-                    slide_data['text_content'].append({
-                        'shape_type': shape.shape_type,
-                        'text': text,
-                        'position': str(shape.left) + "," + str(shape.top)
-                    })
-            
-            # 统计图像
-            if hasattr(shape, 'image'):
-                slide_data['images_count'] += 1
-        
-        presentation_data['slides'].append(slide_data)
-    
-    # 保存提取的数据
-    output_file = file_path.replace('.pptx', '_content.json')
-    with open(output_file, 'w', encoding='utf-8') as f:
-        json.dump(presentation_data, f, ensure_ascii=False, indent=2)
-    
-    print(f"内容提取完成: {output_file}")
-    return presentation_data
-
-# 使用函数
-content_data = extract_presentation_content('sample.pptx')
-```
-
-### 演示文稿分析报告
-```python
-from pptx import Presentation
-from collections import Counter
-
-def analyze_presentation_structure(file_path):
-    """分析演示文稿结构"""
-    prs = Presentation(file_path)
-    
-    analysis = {
-        'basic_info': {
-            'total_slides': len(prs.slides),
-            'layouts_used': [],
-            'average_text_per_slide': 0,
-            'total_text_characters': 0
-        },
-        'layout_analysis': {},
-        'content_analysis': {}
-    }
-    
-    # 分析布局使用情况
-    layout_counter = Counter()
-    text_lengths = []
-    
-    for slide in prs.slides:
-        layout_name = slide.slide_layout.name
-        layout_counter[layout_name] += 1
-        
-        # 分析文本内容
-        slide_text_length = 0
-        for shape in slide.shapes:
-            if shape.has_text_frame:
-                text = shape.text.strip()
-                slide_text_length += len(text)
-        
-        text_lengths.append(slide_text_length)
-        analysis['basic_info']['total_text_characters'] += slide_text_length
-    
-    # 计算统计数据
-    analysis['basic_info']['layouts_used'] = dict(layout_counter)
-    analysis['basic_info']['average_text_per_slide'] = \
-        sum(text_lengths) / len(text_lengths) if text_lengths else 0
-    
-    # 布局分析
-    analysis['layout_analysis'] = {
-        'most_used_layout': layout_counter.most_common(1)[0] if layout_counter else None,
-        'layout_diversity': len(layout_counter),
-        'layout_distribution': dict(layout_counter)
-    }
-    
-    # 内容分析
-    analysis['content_analysis'] = {
-        'text_density': analysis['basic_info']['average_text_per_slide'],
-        'content_balance': {
-            'text_heavy_slides': len([l for l in text_lengths if l > 500]),
-            'minimal_text_slides': len([l for l in text_lengths if l < 100])
-        }
-    }
-    
-    # 生成报告
-    print("=== 演示文稿分析报告 ===")
-    print(f"文件: {file_path}")
-    print(f"总幻灯片数: {analysis['basic_info']['total_slides']}")
-    print(f"使用的布局种类: {analysis['layout_analysis']['layout_diversity']}")
-    print(f"最常用布局: {analysis['layout_analysis']['most_used_layout']}")
-    print(f"平均每张幻灯片文本长度: {analysis['basic_info']['average_text_per_slide']:.0f} 字符")
-    print(f"总文本字符数: {analysis['basic_info']['total_text_characters']}")
-    
-    return analysis
-
-# 使用函数
-analysis_report = analyze_presentation_structure('sample.pptx')
-```
-
-## JavaScript解决方案
-
-### 使用PptxGenJS
-```javascript
-// 在浏览器中生成PPTX
-const pptx = new PptxGenJS();
-
-// 创建标题幻灯片
-let slide = pptx.addSlide();
-slide.addText('JavaScript生成的演示文稿', {
-    x: 1, y: 1, w: '80%', h: 1.5,
-    fontSize: 24, bold: true, align: 'center'
-});
-
-// 添加内容幻灯片
-slide = pptx.addSlide();
-slide.addText('主要内容', { x: 0.5, y: 0.5, fontSize: 20, bold: true });
-
-// 添加项目符号列表
-slide.addText([
-    { text: '第一点', options: { x: 1, y: 1.5, fontSize: 16 } },
-    { text: '第二点', options: { x: 1, y: 2.0, fontSize: 16 } },
-    { text: '第三点', options: { x: 1, y: 2.5, fontSize: 16 } }
-]);
-
-// 添加图表
-slide = pptx.addSlide();
-slide.addChart(pptx.charts.BAR, [
-    { name: '产品A', labels: ['Q1', 'Q2', 'Q3', 'Q4'], values: [25, 30, 45, 40] },
-    { name: '产品B', labels: ['Q1', 'Q2', 'Q3', 'Q4'], values: [15, 25, 35, 30] }
-], { x: 1, y: 1, w: 6, h: 4 });
-
-// 保存PPTX
-pptx.writeFile({ fileName: 'javascript_presentation.pptx' });
-```
-
-### Node.js中的PPTX处理
-```javascript
-// 使用node-pptx库（示例）
-const pptx = require('node-pptx');
-
-async function createPptxWithNode() {
-    // 创建新演示文稿
-    const presentation = new pptx.Presentation();
-    
-    // 添加幻灯片
-    const slide = presentation.addSlide();
-    
-    // 添加标题
-    slide.addText('Node.js生成的PPTX', {
-        x: 100, y: 100, w: 400, h: 50,
-        fontSize: 24, bold: true
-    });
-    
-    // 添加内容
-    slide.addText('使用Node.js创建PowerPoint演示文稿', {
-        x: 100, y: 200, w: 400, h: 30,
-        fontSize: 16
-    });
-    
-    // 保存文件
-    await presentation.save('node_presentation.pptx');
-    console.log('PPTX文件创建完成');
-}
-
-createPptxWithNode().catch(console.error);
-```
-
-## 最佳实践
-
-### 代码组织和可维护性
-```python
-from pptx import Presentation
-from pptx.util import Inches
-import os
-
-class PowerPointGenerator:
-    """PowerPoint生成器类"
+## 代码风格指南
+**重要**：当为 PPTX 操作生成代码时：
+- 编写简洁的代码
+- 避免冗长的变量名和冗余操作
+- 避免不必要的打印语句
+
+## 依赖项
+
+必需的依赖项（应该已经安装）：
+
+- **markitdown**：`pip install "markitdown[pptx]"`（用于从演示文稿中提取文本）
+- **pptxgenjs**：`npm install -g pptxgenjs`（用于通过 html2pptx 创建演示文稿）
+- **playwright**：`npm install -g playwright`（用于 html2pptx 中的 HTML 渲染）
+- **react-icons**：`npm install -g react-icons react react-dom`（用于图标）
+- **sharp**：`npm install -g sharp`（用于 SVG 栅格化和图像处理）
+- **LibreOffice**：`sudo apt-get install libreoffice`（用于 PDF 转换）
+- **Poppler**：`sudo apt-get install poppler-utils`（用于 pdftoppm 将 PDF 转换为图像）
+- **defusedxml**：`pip install defusedxml`（用于安全 XML 解析）
